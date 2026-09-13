@@ -20,7 +20,7 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Register one MCP server with a harness.
-    Register(RegisterArgs),
+    Register(Box<RegisterArgs>),
     /// Inspect harness configuration targets and delegated CLIs.
     Doctor(DoctorArgs),
     /// List supported harness adapters.
@@ -115,7 +115,7 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), kurir::Error> {
     match Cli::parse().command {
-        Command::Register(args) => register_command(args),
+        Command::Register(args) => register_command(*args),
         Command::Doctor(args) => doctor_command(args),
         Command::Clients => {
             for harness in Harness::ALL {
