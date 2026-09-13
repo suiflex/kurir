@@ -1,7 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Kurir mark</title>
-  <desc id="desc">A green courier arrow moving through a dark rounded square.</desc>
-  <rect width="128" height="128" rx="28" fill="#0f172a"/>
-  <path d="M28 67.5h49.2L62.8 53.1a7 7 0 0 1 9.9-9.9l26.1 26.1a7 7 0 0 1 0 9.9l-26.1 26.1a7 7 0 1 1-9.9-9.9l14.4-14.4H28a7 7 0 0 1 0-14z" fill="#4ade80"/>
-  <circle cx="32" cy="35" r="8" fill="#a7f3d0"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Kurir">
+  <rect width="32" height="32" rx="7" fill="#0a0a0a"/>
+  <circle cx="9" cy="8.5" r="2.3" fill="#a7f3d0"/>
+  <path d="M6 16h12.2l-3.3-3.3a2.2 2.2 0 0 1 3.1-3.1l7.1 7.1a2.2 2.2 0 0 1 0 3.1L18 26.9a2.2 2.2 0 1 1-3.1-3.1l3.3-3.3H6a2.2 2.2 0 0 1 0-4.4z" fill="#4ade80"/>
 </svg>

@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 128" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img" aria-labelledby="title desc">
   <title id="title">Kurir</title>
   <desc id="desc">Kurir MCP harness integration toolkit.</desc>
-  <rect width="128" height="128" rx="28" fill="#f8fafc" stroke="#0f172a" stroke-width="4"/>
-  <path d="M28 67.5h49.2L62.8 53.1a7 7 0 0 1 9.9-9.9l26.1 26.1a7 7 0 0 1 0 9.9l-26.1 26.1a7 7 0 1 1-9.9-9.9l14.4-14.4H28a7 7 0 0 1 0-14z" fill="#16a34a"/>
-  <circle cx="32" cy="35" r="8" fill="#166534"/>
-  <text x="156" y="80" fill="#0f172a" font-family="ui-sans-serif, system-ui, sans-serif" font-size="58" font-weight="700" letter-spacing="2">KURIR</text>
+  <rect width="96" height="96" rx="21" fill="#f8fafc"/>
+  <circle cx="27" cy="25.5" r="6.9" fill="#166534"/>
+  <path d="M18 48h36.6l-9.9-9.9a6.6 6.6 0 0 1 9.3-9.3l21.3 21.3a6.6 6.6 0 0 1 0 9.3L54 80.7a6.6 6.6 0 1 1-9.3-9.3l9.9-9.9H18a6.6 6.6 0 0 1 0-13.2z" fill="#4ade80"/>
+  <text x="117" y="60" fill="#0a0a0a" font-family="ui-sans-serif, system-ui, sans-serif" font-size="43" font-weight="700" letter-spacing="1.5">KURIR</text>
 </svg>
