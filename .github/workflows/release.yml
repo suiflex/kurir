@@ -99,16 +99,18 @@ jobs:
     if: github.event_name == 'push'
     needs: publish-release
     runs-on: ubuntu-latest
+    env:
+      BOOTSTRAP_CARGO_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      BOOTSTRAP_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     environment: Release
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
-        if: ${{ secrets.CARGO_REGISTRY_TOKEN == '' }}
+        if: env.BOOTSTRAP_CARGO_TOKEN == ''
       - name: Publish Kurir to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || steps.auth.outputs.token }}
@@ -124,6 +126,8 @@ jobs:
     if: github.event_name == 'push'
     needs: publish-release
     environment: Release
+    env:
+      BOOTSTRAP_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     permissions:
       contents: read
       id-token: write
@@ -133,9 +137,8 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      - run: npm install -g npm@11.5.2
       - name: Configure npm bootstrap token
-        if: ${{ secrets.NPM_TOKEN != '' }}
+        if: env.BOOTSTRAP_NPM_TOKEN != ''
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
@@ -148,6 +151,9 @@ jobs:
         working-directory: npm
   recover-registries:
     if: github.event_name == 'workflow_dispatch'
+    env:
+      BOOTSTRAP_CARGO_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      BOOTSTRAP_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     runs-on: ubuntu-latest
     environment: Release
     permissions:
@@ -160,7 +166,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
-        if: ${{ secrets.CARGO_REGISTRY_TOKEN == '' }}
+        if: env.BOOTSTRAP_CARGO_TOKEN == ''
       - name: Publish Kurir to crates.io if missing
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || steps.auth.outputs.token }}
@@ -181,7 +187,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@11.5.2
       - name: Configure npm bootstrap token
-        if: ${{ secrets.NPM_TOKEN != '' }}
+        if: env.BOOTSTRAP_NPM_TOKEN != ''
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
