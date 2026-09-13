@@ -124,7 +124,7 @@ jobs:
 
   publish-npm:
     if: github.event_name == 'push'
-    needs: publish-release
+    runs-on: ubuntu-latest
     environment: Release
     env:
       BOOTSTRAP_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
