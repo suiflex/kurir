@@ -212,6 +212,7 @@ fn target_name() -> Result<&'static str, Error> {
         ("macos", "x86_64") => Ok("darwin-x86_64"),
         ("macos", "aarch64") => Ok("darwin-aarch64"),
         ("windows", "x86_64") => Ok("windows-x86_64"),
+        ("windows", "aarch64") => Ok("windows-aarch64"),
         _ => Err(Error::Update(format!(
             "unsupported update platform {}-{}",
             env::consts::OS,
