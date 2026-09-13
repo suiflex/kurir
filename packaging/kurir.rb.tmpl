@@ -3,8 +3,26 @@ class Kurir < Formula
   homepage "https://github.com/suiflex/kurir"
   version "{{VERSION}}"
   license "MIT"
-  url "https://github.com/suiflex/kurir/releases/download/v#{version}/kurir-#{version}-{{TARGET}}.tar.gz"
-  sha256 "{{SHA256}}"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/suiflex/kurir/releases/download/v#{version}/kurir-#{version}-darwin-aarch64.tar.gz"
+      sha256 "{{MAC_ARM_SHA}}"
+    else
+      url "https://github.com/suiflex/kurir/releases/download/v#{version}/kurir-#{version}-darwin-x86_64.tar.gz"
+      sha256 "{{MAC_X64_SHA}}"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/suiflex/kurir/releases/download/v#{version}/kurir-#{version}-linux-aarch64.tar.gz"
+      sha256 "{{LINUX_ARM_SHA}}"
+    else
+      url "https://github.com/suiflex/kurir/releases/download/v#{version}/kurir-#{version}-linux-x86_64.tar.gz"
+      sha256 "{{LINUX_X64_SHA}}"
+    end
+  end
 
   def install
     bin.install "kurir"
