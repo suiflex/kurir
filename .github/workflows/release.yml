@@ -1,0 +1,200 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing Kurir tag to republish to crates.io and npm
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target ${{ matrix.target }}
+      - name: Package release asset
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          release_dir="target/${TARGET}/release"
+          mkdir -p dist
+          case "$TARGET" in
+            x86_64-unknown-linux-gnu) asset_target="linux-x86_64" ;;
+            aarch64-unknown-linux-gnu) asset_target="linux-aarch64" ;;
+            x86_64-apple-darwin) asset_target="darwin-x86_64" ;;
+            aarch64-apple-darwin) asset_target="darwin-aarch64" ;;
+            x86_64-pc-windows-msvc) asset_target="windows-x86_64" ;;
+            *) echo "Unsupported release target: $TARGET" >&2; exit 1 ;;
+          esac
+          case "$TARGET" in
+            *windows*)
+              asset="kurir-${version}-${asset_target}.zip"
+              bare="kurir-${version}-${asset_target}.exe"
+              (cd "$release_dir" && 7z a "$OLDPWD/dist/$asset" kurir.exe >/dev/null)
+              cp "${release_dir}/kurir.exe" "dist/${bare}"
+              ;;
+            *)
+              asset="kurir-${version}-${asset_target}.tar.gz"
+              bare="kurir-${version}-${asset_target}"
+              tar -czf "dist/$asset" -C "$release_dir" kurir
+              cp "${release_dir}/kurir" "dist/${bare}"
+              ;;
+          esac
+          for file in "$asset" "$bare"; do
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "dist/$file" > "dist/$file.sha256"
+            else
+              shasum -a 256 "dist/$file" > "dist/$file.sha256"
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish-release:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Kurir ${{ github.ref_name }}
+          files: kurir-*
+
+  publish-crates:
+    if: github.event_name == 'push'
+    needs: publish-release
+    runs-on: ubuntu-latest
+    environment: Release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+        if: ${{ secrets.CARGO_REGISTRY_TOKEN == '' }}
+      - name: Publish Kurir to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || steps.auth.outputs.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          manifest="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          test "$manifest" = "$version"
+          cargo publish
+
+  publish-npm:
+    if: github.event_name == 'push'
+    needs: publish-release
+    environment: Release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@11.5.2
+      - name: Configure npm bootstrap token
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
+      - name: Verify package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          test "$(node -p "require('./npm/package.json').version")" = "${TAG#v}"
+      - run: npm publish --access public
+        working-directory: npm
+  recover-registries:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: Release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+        if: ${{ secrets.CARGO_REGISTRY_TOKEN == '' }}
+      - name: Publish Kurir to crates.io if missing
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || steps.auth.outputs.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          manifest="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          test "$manifest" = "$version"
+          if curl -sf https://index.crates.io/ku/ri/kurir | grep -q "\"vers\":\"${version}\""; then
+            echo "kurir ${version} is already on crates.io"
+          else
+            cargo publish
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@11.5.2
+      - name: Configure npm bootstrap token
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
+      - name: Publish Kurir to npm if missing
+        working-directory: npm
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          test "$(node -p "require('./package.json').version")" = "$version"
+          if npm view "@suiflex/kurir@${version}" version >/dev/null 2>&1; then
+            echo "@suiflex/kurir ${version} is already on npm"
+          else
+            npm publish --access public
+          fi

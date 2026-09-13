@@ -1,0 +1,14 @@
+# Organization-wide ForgeGuard gate for pull requests.
+name: Guardener
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  forgeguard:
+    if: github.repository_owner == 'suiflex'
+    uses: suiflex/Guardener/.github/workflows/check.yml@main

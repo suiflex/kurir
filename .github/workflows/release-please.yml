@@ -1,0 +1,88 @@
+name: release-please
+
+# Version, changelog, contributor attribution, and GitHub Release preparation.
+# A maintainer starts preparation manually. Ordinary PR merges are ignored.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release-please--'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Attribute contributors in changelog
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+        run: |
+          set -euo pipefail
+          branch=$(jq -r '.headBranchName // empty' <<<"$RELEASE_PR")
+          if [ -z "$branch" ]; then
+            branch=$(gh pr list --state open --label "autorelease: pending" \
+              --json headRefName --jq '.[0].headRefName')
+          fi
+          if [ -z "$branch" ]; then
+            echo "no open release PR; nothing to attribute"
+            exit 0
+          fi
+          git fetch origin "$branch"
+          git checkout "$branch"
+          python3 .github/scripts/attribute_changelog.py CHANGELOG.md
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "changelog already attributed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "docs: attribute changelog contributors"
+          git push origin "$branch"
+
+      - name: Use attributed changelog as release notes
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          git checkout main
+          version="${TAG#v}"
+          awk -v h="## [$version](" '
+            index($0, h) == 1 { grab = 1; next }
+            grab && /^## / { exit }
+            grab { print }
+          ' CHANGELOG.md | sed '/./,$!d' > release-notes.md
+          if [ -s release-notes.md ] && grep -q '^### ' release-notes.md; then
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            echo "no attributed changelog block; leaving release notes unchanged"
+          fi
+          rm -f release-notes.md

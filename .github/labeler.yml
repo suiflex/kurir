@@ -1,0 +1,66 @@
+"area: harness":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/harness/**"
+
+"area: registration":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/registration/**"
+          - "src/jsonc.rs"
+
+"area: core":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/model.rs"
+          - "src/error.rs"
+          - "src/lib.rs"
+
+"area: update":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/update.rs"
+
+"area: rust":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/**"
+          - "Cargo.toml"
+          - "Cargo.lock"
+
+"area: npm":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "npm/**"
+
+"area: packaging":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "packaging/**"
+          - "scripts/**"
+
+"area: ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "Makefile"
+          - "release-please-config.json"
+          - ".release-please-manifest.json"
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "LICENSE"
+
+"area: brand":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "assets/**"
+
+"area: security":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "SECURITY.md"
+          - "src/error.rs"
+          - "src/jsonc.rs"

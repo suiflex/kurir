@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in Kurir behaves differently than documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities here. Use the private security advisory link instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: Kurir version
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15 (aarch64) / Ubuntu 24.04 / Windows 11
+    validations:
+      required: true
+
+  - type: input
+    id: harness
+    attributes:
+      label: Harness
+      placeholder: Claude Code / Codex / OpenCode / other
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Include the command, harness, and error without secrets.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Use a temporary configuration path and redact environment values.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `kurir doctor`
+      render: json
+    validations:
+      required: false

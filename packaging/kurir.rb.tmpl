@@ -1,0 +1,16 @@
+class Kurir < Formula
+  desc "Portable MCP server registration and harness integration toolkit"
+  homepage "https://github.com/suiflex/kurir"
+  version "{{VERSION}}"
+  license "MIT"
+  url "https://github.com/suiflex/kurir/releases/download/v#{version}/kurir-#{version}-{{TARGET}}.tar.gz"
+  sha256 "{{SHA256}}"
+
+  def install
+    bin.install "kurir"
+  end
+
+  test do
+    assert_match "kurir", shell_output("#{bin}/kurir --version")
+  end
+end

@@ -1,0 +1,34 @@
+{
+  "name": "@suiflex/kurir",
+  "version": "0.0.0",
+  "description": "Portable MCP server registration and harness integration toolkit",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/suiflex/kurir.git",
+    "directory": "npm"
+  },
+  "homepage": "https://github.com/suiflex/kurir",
+  "bugs": {
+    "url": "https://github.com/suiflex/kurir/issues"
+  },
+  "keywords": ["mcp", "model-context-protocol", "harness", "registration", "cli"],
+  "bin": {
+    "kurir": "bin/kurir.js"
+  },
+  "files": [
+    "README.md",
+    "bin/",
+    "scripts/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js",
+    "test": "node --test test/*.test.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

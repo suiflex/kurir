@@ -1,0 +1,11 @@
+{
+  "release-type": "simple",
+  "packages": {
+    ".": {
+      "component": "kurir",
+      "package-name": "kurir",
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}

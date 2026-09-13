@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest a harness, transport, or registration capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that Kurir makes hard or impossible today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the harness, config path, entry shape, scope, and failure behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility evidence
+      description: Link to official harness documentation or a reproducible configuration example.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: The proposal does not require secrets in committed project configuration.
+          required: false
+        - label: The proposal preserves unrelated configuration entries.
+          required: false
