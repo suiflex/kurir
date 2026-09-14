@@ -3,7 +3,9 @@ use std::{fmt, str::FromStr};
 use crate::Error;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[repr(u8)]
 pub enum Harness {
+    ArsyCode,
     ClaudeCode,
     ClaudeCodeCli,
     ClaudeDesktop,
@@ -23,7 +25,8 @@ pub enum Harness {
 }
 
 impl Harness {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
+        Self::ArsyCode,
         Self::ClaudeCode,
         Self::ClaudeCodeCli,
         Self::ClaudeDesktop,
@@ -42,55 +45,75 @@ impl Harness {
         Self::AntigravityDesktop,
     ];
 
+    const IDS: [&'static str; 17] = [
+        "arsy-code",
+        "claude-code",
+        "claude-code-cli",
+        "claude-desktop",
+        "codex",
+        "cursor",
+        "vscode",
+        "gemini-cli",
+        "copilot-cli",
+        "opencode",
+        "windsurf",
+        "zed",
+        "openclaw",
+        "hermes",
+        "omp",
+        "antigravity-cli",
+        "antigravity-desktop",
+    ];
+
+    const SUMMARIES: [&'static str; 17] = [
+        "delegate to arsy mcp add",
+        "merge ~/.claude.json or project .mcp.json",
+        "delegate to claude mcp add",
+        "merge Claude Desktop config",
+        "delegate to codex mcp add",
+        "merge Cursor mcp.json",
+        "delegate to code --add-mcp",
+        "delegate to gemini mcp add",
+        "merge ~/.copilot/mcp-config.json",
+        "merge opencode.json",
+        "merge ~/.codeium/windsurf/mcp_config.json",
+        "merge Zed context_servers",
+        "merge openclaw.json mcp.servers",
+        "delegate to hermes mcp add",
+        "print a portable snippet",
+        "merge Antigravity CLI mcp_config.json",
+        "merge Antigravity Desktop mcp_config.json",
+    ];
+
+    const ALIASES: [(&'static str, Self); 6] = [
+        ("arsy", Self::ArsyCode),
+        ("claude", Self::ClaudeCode),
+        ("vscode", Self::Vscode),
+        ("copilot-vscode", Self::Vscode),
+        ("gemini", Self::GeminiCli),
+        ("antigravity", Self::AntigravityCli),
+    ];
+
     #[must_use]
     pub const fn id(self) -> &'static str {
-        match self {
-            Self::ClaudeCode => "claude-code",
-            Self::ClaudeCodeCli => "claude-code-cli",
-            Self::ClaudeDesktop => "claude-desktop",
-            Self::Codex => "codex",
-            Self::Cursor => "cursor",
-            Self::Vscode => "vscode",
-            Self::GeminiCli => "gemini-cli",
-            Self::CopilotCli => "copilot-cli",
-            Self::OpenCode => "opencode",
-            Self::Windsurf => "windsurf",
-            Self::Zed => "zed",
-            Self::OpenClaw => "openclaw",
-            Self::Hermes => "hermes",
-            Self::Omp => "omp",
-            Self::AntigravityCli => "antigravity-cli",
-            Self::AntigravityDesktop => "antigravity-desktop",
-        }
+        Self::IDS[self as usize]
     }
 
     #[must_use]
     pub const fn summary(self) -> &'static str {
-        match self {
-            Self::ClaudeCode => "merge ~/.claude.json or project .mcp.json",
-            Self::ClaudeCodeCli => "delegate to claude mcp add",
-            Self::ClaudeDesktop => "merge Claude Desktop config",
-            Self::Codex => "delegate to codex mcp add",
-            Self::Cursor => "merge Cursor mcp.json",
-            Self::Vscode => "delegate to code --add-mcp",
-            Self::GeminiCli => "delegate to gemini mcp add",
-            Self::CopilotCli => "merge ~/.copilot/mcp-config.json",
-            Self::OpenCode => "merge opencode.json",
-            Self::Windsurf => "merge ~/.codeium/windsurf/mcp_config.json",
-            Self::Zed => "merge Zed context_servers",
-            Self::OpenClaw => "merge openclaw.json mcp.servers",
-            Self::Hermes => "delegate to hermes mcp add",
-            Self::Omp => "print a portable snippet",
-            Self::AntigravityCli => "merge Antigravity CLI mcp_config.json",
-            Self::AntigravityDesktop => "merge Antigravity Desktop mcp_config.json",
-        }
+        Self::SUMMARIES[self as usize]
     }
 
     #[must_use]
     pub const fn is_delegated(self) -> bool {
         matches!(
             self,
-            Self::ClaudeCodeCli | Self::Codex | Self::Vscode | Self::GeminiCli | Self::Hermes
+            Self::ArsyCode
+                | Self::ClaudeCodeCli
+                | Self::Codex
+                | Self::Vscode
+                | Self::GeminiCli
+                | Self::Hermes
         )
     }
 
@@ -104,25 +127,11 @@ impl FromStr for Harness {
     type Err = Error;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "claude" | "claude-code" => Ok(Self::ClaudeCode),
-            "claude-code-cli" => Ok(Self::ClaudeCodeCli),
-            "claude-desktop" => Ok(Self::ClaudeDesktop),
-            "codex" => Ok(Self::Codex),
-            "cursor" => Ok(Self::Cursor),
-            "vscode" | "copilot-vscode" => Ok(Self::Vscode),
-            "gemini" | "gemini-cli" => Ok(Self::GeminiCli),
-            "copilot-cli" => Ok(Self::CopilotCli),
-            "opencode" => Ok(Self::OpenCode),
-            "windsurf" => Ok(Self::Windsurf),
-            "zed" => Ok(Self::Zed),
-            "openclaw" => Ok(Self::OpenClaw),
-            "hermes" => Ok(Self::Hermes),
-            "omp" => Ok(Self::Omp),
-            "antigravity" | "antigravity-cli" => Ok(Self::AntigravityCli),
-            "antigravity-desktop" => Ok(Self::AntigravityDesktop),
-            _ => Err(Error::UnknownHarness(value.to_owned())),
-        }
+        Self::ALIASES
+            .iter()
+            .find_map(|(alias, harness)| (*alias == value).then_some(*harness))
+            .or_else(|| Self::ALL.into_iter().find(|harness| harness.id() == value))
+            .ok_or_else(|| Error::UnknownHarness(value.to_owned()))
     }
 }
 

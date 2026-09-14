@@ -80,6 +80,23 @@ you want the package manager to own the upgrade.
 
 ## Register a server
 
+Register a server with ARSY CODE:
+
+```sh
+kurir register \
+  --client arsy-code \
+  --scope user \
+  --name my-server \
+  --command my-server \
+  --arg mcp
+```
+
+Use `--scope project` to write the connection into ARSY's workspace
+configuration. Kurir delegates to the installed `arsy mcp add` command and
+supports ARSY's `stdio` and `http` transports. ARSY's CLI has no fields for
+environment variables or HTTP headers, so Kurir rejects those fields instead
+of silently dropping them.
+
 ```sh
 kurir register \
   --client opencode \
@@ -125,6 +142,7 @@ Kurir redacts environment values and headers in previews. Registration writes a 
 
 | Harness | Registration mode |
 | --- | --- |
+| ARSY CODE | `arsy mcp add` |
 | Claude Code | JSON merge or `claude mcp add` |
 | Claude Desktop | JSON merge |
 | Codex | `codex mcp add` |
