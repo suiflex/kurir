@@ -350,6 +350,9 @@ fn delegated_steps(
     spec: &ServerSpec,
     options: &RegistrationOptions,
 ) -> Result<Vec<Step>, Error> {
+    if harness == Harness::ArsyCode {
+        return arsy_steps(spec, options);
+    }
     if spec.transport != Transport::Stdio {
         return unsupported(harness, "remote delegated registration");
     }
@@ -451,6 +454,68 @@ fn delegated_steps(
         env: envs,
         cwd: Some(options.cwd.clone()),
         redacted,
+        ignore_failure: false,
+    });
+    Ok(steps)
+}
+
+fn arsy_steps(spec: &ServerSpec, options: &RegistrationOptions) -> Result<Vec<Step>, Error> {
+    if !matches!(spec.transport, Transport::Stdio | Transport::Http) {
+        return unsupported(Harness::ArsyCode, "sse or ws transport");
+    }
+    if !spec.env.is_empty() || !spec.headers.is_empty() {
+        return unsupported(Harness::ArsyCode, "environment variables or headers");
+    }
+    let scope = match options.scope {
+        Scope::User => "user",
+        Scope::Project => "workspace",
+        Scope::Local => return unsupported(Harness::ArsyCode, "local file scope"),
+    };
+    let mut args = vec![
+        "mcp".into(),
+        "add".into(),
+        spec.name.clone(),
+        "--scope".into(),
+        scope.into(),
+    ];
+    match spec.transport {
+        Transport::Stdio => {
+            args.extend(["--command".into(), spec.command.clone().unwrap_or_default()]);
+        }
+        Transport::Http => {
+            args.extend([
+                "--transport".into(),
+                "http".into(),
+                "--url".into(),
+                spec.url.clone().unwrap_or_default(),
+            ]);
+        }
+        Transport::Sse | Transport::Ws => unreachable!("validated above"),
+    }
+    args.extend(spec.args.iter().cloned());
+    let mut steps = Vec::new();
+    if options.force {
+        steps.push(Step {
+            program: "arsy".into(),
+            args: vec![
+                "mcp".into(),
+                "remove".into(),
+                spec.name.clone(),
+                "--scope".into(),
+                scope.into(),
+            ],
+            env: BTreeMap::new(),
+            cwd: Some(options.cwd.clone()),
+            redacted: vec![false; 5],
+            ignore_failure: true,
+        });
+    }
+    steps.push(Step {
+        program: "arsy".into(),
+        redacted: vec![false; args.len()],
+        args,
+        env: BTreeMap::new(),
+        cwd: Some(options.cwd.clone()),
         ignore_failure: false,
     });
     Ok(steps)
@@ -614,6 +679,67 @@ mod tests {
             entry_for(Harness::OpenCode, &spec).expect("entry")["type"],
             "local"
         );
+    }
+
+    #[test]
+    fn arsy_code_delegates_stdio_with_workspace_scope() {
+        let mut options = opts(Path::new("/workspace"));
+        options.scope = Scope::Project;
+        let steps = delegated_steps(
+            Harness::ArsyCode,
+            &ServerSpec::stdio("demo", "demo", vec!["--serve".into()]),
+            &options,
+        )
+        .expect("steps");
+
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].program, "arsy");
+        assert_eq!(
+            steps[0].args,
+            vec![
+                String::from("mcp"),
+                String::from("add"),
+                String::from("demo"),
+                String::from("--scope"),
+                String::from("workspace"),
+                String::from("--command"),
+                String::from("demo"),
+                String::from("--serve"),
+            ]
+        );
+    }
+
+    #[test]
+    fn arsy_code_delegates_http_and_rejects_unrepresentable_fields() {
+        let options = opts(Path::new("/workspace"));
+        let http = ServerSpec {
+            name: "remote".into(),
+            transport: Transport::Http,
+            url: Some("https://example.test/mcp".into()),
+            ..Default::default()
+        };
+        let steps = delegated_steps(Harness::ArsyCode, &http, &options).expect("steps");
+        assert_eq!(
+            steps[0].args,
+            vec![
+                String::from("mcp"),
+                String::from("add"),
+                String::from("remote"),
+                String::from("--scope"),
+                String::from("workspace"),
+                String::from("--transport"),
+                String::from("http"),
+                String::from("--url"),
+                String::from("https://example.test/mcp"),
+            ]
+        );
+
+        let mut with_env = ServerSpec::stdio("demo", "demo", Vec::new());
+        with_env.env.insert("TOKEN".into(), "secret".into());
+        assert!(matches!(
+            delegated_steps(Harness::ArsyCode, &with_env, &options),
+            Err(Error::Unsupported { .. })
+        ));
     }
 
     #[test]
