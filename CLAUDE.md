@@ -20,6 +20,8 @@ Kurir is a public, product-agnostic MCP harness integration toolkit. Rust is the
 | `src/harness/mod.rs` | Harness registry and capability classification |
 | `src/jsonc.rs` | Safe JSON/JSONC object loading and writing |
 | `src/registration/mod.rs` | File merge, delegated CLI, doctor, and entry-shape logic |
+| `src/hooks.rs` | Harness hook file paths and hook handler shapes |
+| `src/skills.rs` | Harness skill directories per scope |
 | `src/main.rs` | `kurir` CLI |
 | `npm/` | Native binary launcher for npm consumers |
 | `packaging/` | Homebrew and Scoop templates |

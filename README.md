@@ -160,6 +160,24 @@ let options = RegistrationOptions::default();
 register(Harness::OpenCode, &server, &options)?;
 ```
 
+Products that also ship lifecycle hooks or skills can ask Kurir where each harness
+reads them and how a hook entry is shaped. Loading, de-duplicating, and writing the
+file stay with the product:
+
+```rust
+use kurir::{Harness, HookSpec, Scope, add_hook, hook_file, skills_dir};
+
+let file = hook_file(Harness::Codex); // Some(".codex/hooks.json")
+let hook = HookSpec {
+    event: "Stop".into(),
+    matcher: None,
+    command: "my-tool hook stop".into(),
+    timeout_seconds: 600,
+};
+add_hook(Harness::Codex, &mut document, &hook, path)?;
+let skills = skills_dir(Harness::OpenCode, Scope::User); // Some(".config/opencode/skills")
+```
+
 ## Development
 
 Requirements: Rust 1.88+, Cargo, Node 18+.
