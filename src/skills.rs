@@ -24,3 +24,35 @@ pub const fn skills_dir(harness: Harness, scope: Scope) -> Option<&'static str> 
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn skill_directories_follow_each_harness_scope() {
+        let cases = [
+            (Harness::ClaudeCode, Scope::User, Some(".claude/skills")),
+            (Harness::Codex, Scope::User, Some(".agents/skills")),
+            (Harness::Cursor, Scope::Project, Some(".agents/skills")),
+            (Harness::OpenCode, Scope::Project, Some(".agents/skills")),
+            (
+                Harness::OpenCode,
+                Scope::User,
+                Some(".config/opencode/skills"),
+            ),
+            (Harness::Hermes, Scope::User, Some(".hermes/skills")),
+            (Harness::OpenClaw, Scope::User, Some(".openclaw/skills")),
+            (
+                Harness::AntigravityCli,
+                Scope::User,
+                Some(".gemini/antigravity-cli/skills"),
+            ),
+            (Harness::ClaudeCode, Scope::Local, None),
+            (Harness::Zed, Scope::User, None),
+        ];
+        for (harness, scope, expected) in cases {
+            assert_eq!(skills_dir(harness, scope), expected, "{harness} {scope:?}");
+        }
+    }
+}

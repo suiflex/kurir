@@ -86,3 +86,94 @@ pub fn add_hook(
     handlers.push(handler);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn spec(matcher: Option<&str>) -> HookSpec {
+        HookSpec {
+            event: "PreToolUse".to_owned(),
+            matcher: matcher.map(str::to_owned),
+            command: "demo hook".to_owned(),
+            timeout_seconds: 5,
+        }
+    }
+
+    #[test]
+    fn grouped_harnesses_nest_the_command_under_hooks() {
+        for harness in [Harness::ClaudeCode, Harness::Codex] {
+            let mut document = json!({"keep": true});
+            add_hook(
+                harness,
+                &mut document,
+                &spec(Some("Edit")),
+                Path::new("h.json"),
+            )
+            .expect("hook");
+            assert_eq!(document["keep"], true);
+            assert_eq!(
+                document["hooks"]["PreToolUse"],
+                json!([{"matcher": "Edit", "hooks": [{"type": "command", "command": "demo hook", "timeout": 5}]}])
+            );
+        }
+    }
+
+    #[test]
+    fn cursor_uses_flat_handlers_and_a_version() {
+        let mut document = json!({});
+        add_hook(
+            Harness::Cursor,
+            &mut document,
+            &spec(None),
+            Path::new("h.json"),
+        )
+        .expect("hook");
+        assert_eq!(
+            document,
+            json!({"version": 1, "hooks": {"PreToolUse": [{"command": "demo hook", "timeout": 5}]}})
+        );
+    }
+
+    #[test]
+    fn existing_handlers_are_appended_to() {
+        let mut document = json!({"hooks": {"PreToolUse": [{"command": "other"}]}});
+        add_hook(
+            Harness::Cursor,
+            &mut document,
+            &spec(None),
+            Path::new("h.json"),
+        )
+        .expect("hook");
+        assert_eq!(
+            document["hooks"]["PreToolUse"].as_array().map(Vec::len),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn malformed_event_field_is_rejected() {
+        let mut document = json!({"hooks": {"PreToolUse": {}}});
+        let error = add_hook(
+            Harness::Codex,
+            &mut document,
+            &spec(None),
+            Path::new("h.json"),
+        )
+        .expect_err("not an array");
+        assert!(matches!(error, Error::InvalidConfigField { .. }));
+    }
+
+    #[test]
+    fn harness_without_hooks_is_unsupported() {
+        assert_eq!(hook_file(Harness::Zed), None);
+        let error = add_hook(
+            Harness::Zed,
+            &mut json!({}),
+            &spec(None),
+            Path::new("h.json"),
+        )
+        .expect_err("unsupported");
+        assert!(matches!(error, Error::Unsupported { .. }));
+    }
+}
