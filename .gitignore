@@ -4,3 +4,6 @@ npm/node_modules/
 npm/vendor/
 .DS_Store
 .forgeguard/
+.codex/
+.claude/
+.agents/
