@@ -126,6 +126,7 @@ jobs:
     if: github.event_name == 'push'
     needs: publish-release
     runs-on: ubuntu-latest
+    environment: Release
     permissions:
       contents: read
       id-token: write
