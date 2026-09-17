@@ -1,5 +1,7 @@
 # @suiflex/kurir
 
+[![M8ven Live Monitored](https://m8ven.ai/badge/mcp/suiflex-kurir-b1f3uw)](https://m8ven.ai/mcp/suiflex-kurir-b1f3uw)
+
 Portable MCP server registration for agent harnesses.
 
 ```sh

@@ -12,6 +12,7 @@
   <a href="https://github.com/suiflex/kurir/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/suiflex/kurir/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI status"></a>
   <a href="https://github.com/suiflex/kurir/releases"><img src="https://img.shields.io/github/v/tag/suiflex/kurir?include_prereleases&style=for-the-badge&label=release" alt="Release"></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-harness%20integration-4ade80?style=for-the-badge" alt="MCP harness integration"></a>
+  <a href="https://m8ven.ai/mcp/suiflex-kurir-b1f3uw"><img src="https://m8ven.ai/badge/mcp/suiflex-kurir-b1f3uw" alt="M8ven Live Monitored"></a>
 </p>
 
 Kurir keeps MCP registration behavior in one reusable implementation. Products provide a generic server specification; Kurir handles harness-specific config paths, entry shapes, scopes, backups, delegated CLIs, dry runs, and diagnostics.
