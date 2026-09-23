@@ -139,6 +139,40 @@ kurir register \
 
 Kurir redacts environment values and headers in previews. Registration writes a `.bak` copy before replacing an existing configuration and refuses conflicts unless `--force` is explicit.
 
+## Register lifecycle hooks
+
+Register a lifecycle hook with a supported harness (e.g. Cursor, Claude Code, Codex):
+
+```sh
+kurir hook \
+  --client cursor \
+  --event PreToolUse \
+  --command "my-linter-check" \
+  --timeout 300
+```
+
+Preview without writing:
+
+```sh
+kurir hook \
+  --client claude-code \
+  --event Stop \
+  --command "my-tool hook stop" \
+  --dry-run \
+  --print
+```
+
+## Install skills
+
+Install a skill folder into the target harness skills directory:
+
+```sh
+kurir skill \
+  --client cursor \
+  --path ./my-skill \
+  --scope project
+```
+
 ## Supported harnesses
 
 | Harness | Registration mode |
@@ -179,22 +213,22 @@ let options = RegistrationOptions::default();
 register(Harness::OpenCode, &server, &options)?;
 ```
 
-Products that also ship lifecycle hooks or skills can ask Kurir where each harness
-reads them and how a hook entry is shaped. Loading, de-duplicating, and writing the
-file stay with the product:
+To register lifecycle hooks or install skills programmatically:
 
 ```rust
-use kurir::{Harness, HookSpec, Scope, add_hook, hook_file, skills_dir};
+use kurir::{Harness, HookSpec, RegistrationOptions, install_skill, register_hook};
+use std::path::Path;
 
-let file = hook_file(Harness::Codex); // Some(".codex/hooks.json")
 let hook = HookSpec {
     event: "Stop".into(),
     matcher: None,
     command: "my-tool hook stop".into(),
     timeout_seconds: 600,
 };
-add_hook(Harness::Codex, &mut document, &hook, path)?;
-let skills = skills_dir(Harness::OpenCode, Scope::User); // Some(".config/opencode/skills")
+let options = RegistrationOptions::default();
+register_hook(Harness::Codex, &hook, &options)?;
+
+install_skill(Harness::OpenCode, Path::new("./my-skill"), &options)?;
 ```
 
 ## Development

@@ -7,3 +7,5 @@ npm/vendor/
 .codex/
 .claude/
 .agents/
+.mcp.json
+.agents/mcp_config.json
