@@ -392,3 +392,38 @@ fn _entry_for_cli_smoke(
 ) -> Result<serde_json::Value, kurir::Error> {
     entry_for(harness, spec)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hook_args_can_be_parsed() {
+        let cli = Cli::try_parse_from([
+            "kurir",
+            "hook",
+            "--client",
+            "cursor",
+            "--event",
+            "PreToolUse",
+            "--command",
+            "echo 1",
+        ])
+        .expect("parse hook");
+        assert!(matches!(cli.command, Command::Hook(_)));
+    }
+
+    #[test]
+    fn skill_args_can_be_parsed() {
+        let cli = Cli::try_parse_from([
+            "kurir",
+            "skill",
+            "--client",
+            "cursor",
+            "--path",
+            "/path/to/skill",
+        ])
+        .expect("parse skill");
+        assert!(matches!(cli.command, Command::Skill(_)));
+    }
+}
