@@ -2,7 +2,8 @@ use std::{collections::BTreeMap, fs, path::PathBuf, process::ExitCode};
 
 use clap::{Args, Parser, Subcommand};
 use kurir::{
-    Harness, RegistrationOptions, Scope, ServerSpec, Transport,
+    Harness, HookSpec, RegistrationOptions, Scope, ServerSpec, Transport, install_skill,
+    register_hook,
     registration::{entry_for, register, snippet_for},
     update,
 };
@@ -21,12 +22,78 @@ struct Cli {
 enum Command {
     /// Register one MCP server with a harness.
     Register(Box<RegisterArgs>),
+    /// Register one lifecycle hook with a harness.
+    Hook(Box<HookArgs>),
+    /// Install a skill into a harness skills directory.
+    Skill(Box<SkillArgs>),
     /// Inspect harness configuration targets and delegated CLIs.
     Doctor(DoctorArgs),
     /// List supported harness adapters.
     Clients,
     /// Check for and install the latest Kurir release.
     Update(UpdateArgs),
+}
+
+#[derive(Debug, Args)]
+struct HookArgs {
+    /// Harness adapter to use. `--harness` is an alias for `--client`.
+    #[arg(long, alias = "harness")]
+    client: String,
+    /// Lifecycle event name (e.g. Stop, `PreToolUse`).
+    #[arg(long)]
+    event: String,
+    /// Command to execute when the lifecycle event fires.
+    #[arg(long)]
+    command: String,
+    /// Optional matcher for tool or event source.
+    #[arg(long)]
+    matcher: Option<String>,
+    /// Command timeout in seconds.
+    #[arg(long, default_value = "600")]
+    timeout: u64,
+    /// Registration scope.
+    #[arg(long, default_value = "user")]
+    scope: String,
+    /// Override the harness hook configuration path.
+    #[arg(long)]
+    config: Option<PathBuf>,
+    /// Working directory used for project targets.
+    #[arg(long, default_value = ".")]
+    cwd: PathBuf,
+    /// Show the hook entry without writing.
+    #[arg(long)]
+    print: bool,
+    /// Validate and preview without writing to file.
+    #[arg(long)]
+    dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+struct SkillArgs {
+    /// Harness adapter to use. `--harness` is an alias for `--client`.
+    #[arg(long, alias = "harness")]
+    client: String,
+    /// Path to the skill directory containing the skill to install.
+    #[arg(long = "path")]
+    path: PathBuf,
+    /// Target registration scope.
+    #[arg(long, default_value = "user")]
+    scope: String,
+    /// Override the harness skills directory path.
+    #[arg(long)]
+    config: Option<PathBuf>,
+    /// Working directory used for project targets.
+    #[arg(long, default_value = ".")]
+    cwd: PathBuf,
+    /// Replace conflicting skill installation.
+    #[arg(long)]
+    force: bool,
+    /// Preview installation path without copying.
+    #[arg(long)]
+    print: bool,
+    /// Validate and preview without writing files.
+    #[arg(long)]
+    dry_run: bool,
 }
 
 #[derive(Debug, Args)]
@@ -116,6 +183,8 @@ fn main() -> ExitCode {
 fn run() -> Result<(), kurir::Error> {
     match Cli::parse().command {
         Command::Register(args) => register_command(*args),
+        Command::Hook(args) => hook_command(*args),
+        Command::Skill(args) => skill_command(*args),
         Command::Doctor(args) => doctor_command(args),
         Command::Clients => {
             for harness in Harness::ALL {
@@ -125,6 +194,72 @@ fn run() -> Result<(), kurir::Error> {
         }
         Command::Update(args) => update(args.check, args.json),
     }
+}
+
+fn hook_command(args: HookArgs) -> Result<(), kurir::Error> {
+    let harness = args.client.parse::<Harness>()?;
+    let spec = HookSpec {
+        event: args.event,
+        matcher: args.matcher,
+        command: args.command,
+        timeout_seconds: args.timeout,
+    };
+    let options = RegistrationOptions {
+        scope: Scope::parse(&args.scope)?,
+        config: args.config,
+        cwd: absolute_path(args.cwd)?,
+        force: false,
+        dry_run: args.dry_run,
+        print: args.print,
+    };
+    let result = register_hook(harness, &spec, &options)?;
+    if !args.print && !args.dry_run {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "harness": result.harness,
+                "name": result.name,
+                "target": result.target,
+                "changed": result.changed,
+                "action": result.action,
+            }))
+            .map_err(|source| kurir::Error::InvalidJson {
+                path: "stdout".to_owned(),
+                source,
+            })?
+        );
+    }
+    Ok(())
+}
+
+fn skill_command(args: SkillArgs) -> Result<(), kurir::Error> {
+    let harness = args.client.parse::<Harness>()?;
+    let options = RegistrationOptions {
+        scope: Scope::parse(&args.scope)?,
+        config: args.config,
+        cwd: absolute_path(args.cwd)?,
+        force: args.force,
+        dry_run: args.dry_run,
+        print: args.print,
+    };
+    let result = install_skill(harness, &args.path, &options)?;
+    if !args.print && !args.dry_run {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "harness": result.harness,
+                "name": result.name,
+                "target": result.target,
+                "changed": result.changed,
+                "action": result.action,
+            }))
+            .map_err(|source| kurir::Error::InvalidJson {
+                path: "stdout".to_owned(),
+                source,
+            })?
+        );
+    }
+    Ok(())
 }
 
 fn register_command(args: RegisterArgs) -> Result<(), kurir::Error> {
