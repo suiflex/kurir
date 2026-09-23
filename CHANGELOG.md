@@ -2,6 +2,16 @@
 
 All notable changes to Kurir are documented here.
 
+## [0.3.0](https://github.com/suiflex/kurir/compare/v0.2.0...v0.3.0) (2026-09-23)
+
+
+### Features
+
+* add full skills and hooks integration parity with mcp ([2f00ced](https://github.com/suiflex/kurir/commit/2f00ced4b23c6c5e16667f2811f372ec2f6b686d))
+* add hook and skill cli subcommands ([1720336](https://github.com/suiflex/kurir/commit/1720336466322d69b67f9d19a5cc7b2080a26ebb))
+* implement lifecycle hook registration with safe file i/o and backup ([5634246](https://github.com/suiflex/kurir/commit/5634246f97911159c17ca2a2ba4da3a7c6e394f2))
+* implement skill installation and directory resolution ([aa15ac7](https://github.com/suiflex/kurir/commit/aa15ac74c3581c29570f3de6fdb32a8b0e4000d5))
+
 ## [0.2.0](https://github.com/suiflex/kurir/compare/v0.1.0...v0.2.0) (2026-09-14)
 
 
