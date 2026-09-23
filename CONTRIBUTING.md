@@ -33,6 +33,7 @@ cargo run -- register \
 ## Design rules
 
 - Add a harness adapter once in Kurir; do not copy its paths into consumer repositories.
+- Address all three integration pillars (MCP server registration, skills directory per scope, and lifecycle hooks) when adding or modifying a harness adapter. If a harness does not support a pillar, document and test it explicitly as unsupported (`None`).
 - Prefer delegated CLIs where the harness owns its config format.
 - Preserve unrelated config entries.
 - Back up before rewriting an existing file.

@@ -31,6 +31,7 @@ Kurir is a public, product-agnostic MCP harness integration toolkit. Rust is the
 ## Harness rules
 
 - Keep harness paths and entry shapes in Kurir, never in product repositories.
+- Treat MCP registration, skills directory mapping, and lifecycle hooks as the three required integration pillars for every harness; explicitly document and test unsupported pillars as `None`.
 - Prefer the harness's own CLI when it owns configuration migration.
 - Use the official OpenCode global path `~/.config/opencode/opencode.json`.
 - Keep ambiguous harness surfaces separate (`antigravity-cli` and `antigravity-desktop`).
