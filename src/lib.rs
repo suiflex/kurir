@@ -9,7 +9,7 @@ pub mod update;
 
 pub use error::Error;
 pub use harness::Harness;
-pub use hooks::{HookSpec, add_hook, hook_file};
+pub use hooks::{HookSpec, add_hook, hook_file, hook_path, is_hook_present, register_hook};
 pub use model::{RegistrationOptions, RegistrationResult, Scope, ServerSpec, Transport};
 pub use registration::{DoctorReport, doctor, register};
 pub use skills::skills_dir;
