@@ -2,6 +2,14 @@
 
 All notable changes to Kurir are documented here.
 
+## [0.4.0](https://github.com/suiflex/kurir/compare/v0.3.0...v0.4.0) (2026-10-03)
+
+
+### Features
+
+* **skills:** support OMP skill installation ([69dbcab](https://github.com/suiflex/kurir/commit/69dbcab5148b1474cfd7d322245b6d458a09d312))
+* **skills:** support OMP skill installation ([8f96b68](https://github.com/suiflex/kurir/commit/8f96b6802e13abb8d81fe1d9946dc3a0e5a5c64e))
+
 ## [0.3.0](https://github.com/suiflex/kurir/compare/v0.2.0...v0.3.0) (2026-09-23)
 
 
