@@ -166,6 +166,8 @@ kurir hook \
 
 Install a skill folder into the target harness skills directory:
 
+OMP uses the shared `.agents/skills` directory for both project and user installs.
+
 ```sh
 kurir skill \
   --client cursor \

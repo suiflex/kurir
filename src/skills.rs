@@ -19,8 +19,8 @@ pub const fn skills_dir(harness: Harness, scope: Scope) -> Option<&'static str> 
         (Harness::ClaudeCode | Harness::ClaudeCodeCli, Scope::Project | Scope::User) => {
             Some(".claude/skills")
         }
-        // Codex and Cursor read the shared `.agents/skills` in both scopes.
-        (Harness::Codex | Harness::Cursor, Scope::Project | Scope::User)
+        // Codex, Cursor, and OMP read the shared `.agents/skills` in both scopes.
+        (Harness::Codex | Harness::Cursor | Harness::Omp, Scope::Project | Scope::User)
         | (
             Harness::OpenCode | Harness::Hermes | Harness::OpenClaw | Harness::AntigravityCli,
             Scope::Project,
@@ -205,6 +205,8 @@ mod tests {
     #[test]
     fn skill_directories_follow_each_harness_scope() {
         let cases = [
+            (Harness::Omp, Scope::Project, Some(".agents/skills")),
+            (Harness::Omp, Scope::User, Some(".agents/skills")),
             (Harness::ClaudeCode, Scope::User, Some(".claude/skills")),
             (Harness::Codex, Scope::User, Some(".agents/skills")),
             (Harness::Cursor, Scope::Project, Some(".agents/skills")),
