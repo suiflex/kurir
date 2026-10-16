@@ -463,14 +463,35 @@ fn arsy_steps(spec: &ServerSpec, options: &RegistrationOptions) -> Result<Vec<St
     if !matches!(spec.transport, Transport::Stdio | Transport::Http) {
         return unsupported(Harness::ArsyCode, "sse or ws transport");
     }
-    if !spec.env.is_empty() || !spec.headers.is_empty() {
-        return unsupported(Harness::ArsyCode, "environment variables or headers");
-    }
     let scope = match options.scope {
         Scope::User => "user",
         Scope::Project => "workspace",
         Scope::Local => return unsupported(Harness::ArsyCode, "local file scope"),
     };
+    // ARSY stores `${NAME}` references only, and only in the user file: the
+    // secret stays in the environment, and a repository file may not read it.
+    let (flag, references) = match spec.transport {
+        Transport::Stdio => ("--env", &spec.env),
+        _ => ("--header", &spec.headers),
+    };
+    if !references.is_empty() && scope != "user" {
+        return unsupported(
+            Harness::ArsyCode,
+            "environment variables or headers outside the user scope",
+        );
+    }
+    if let Some(key) = references
+        .iter()
+        .find(|(_, value)| !value.contains("${"))
+        .map(|(key, _)| key)
+    {
+        return unsupported(
+            Harness::ArsyCode,
+            &format!(
+                "a literal value for `{key}`; reference an environment variable as ${{{key}}}"
+            ),
+        );
+    }
     let mut args = vec![
         "mcp".into(),
         "add".into(),
@@ -491,6 +512,9 @@ fn arsy_steps(spec: &ServerSpec, options: &RegistrationOptions) -> Result<Vec<St
             ]);
         }
         Transport::Sse | Transport::Ws => unreachable!("validated above"),
+    }
+    for (key, value) in references {
+        args.extend([flag.into(), format!("{key}={value}")]);
     }
     args.extend(spec.args.iter().cloned());
     let mut steps = Vec::new();
