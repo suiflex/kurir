@@ -463,14 +463,35 @@ fn arsy_steps(spec: &ServerSpec, options: &RegistrationOptions) -> Result<Vec<St
     if !matches!(spec.transport, Transport::Stdio | Transport::Http) {
         return unsupported(Harness::ArsyCode, "sse or ws transport");
     }
-    if !spec.env.is_empty() || !spec.headers.is_empty() {
-        return unsupported(Harness::ArsyCode, "environment variables or headers");
-    }
     let scope = match options.scope {
         Scope::User => "user",
         Scope::Project => "workspace",
         Scope::Local => return unsupported(Harness::ArsyCode, "local file scope"),
     };
+    // ARSY stores `${NAME}` references only, and only in the user file: the
+    // secret stays in the environment, and a repository file may not read it.
+    let (flag, references) = match spec.transport {
+        Transport::Stdio => ("--env", &spec.env),
+        _ => ("--header", &spec.headers),
+    };
+    if !references.is_empty() && scope != "user" {
+        return unsupported(
+            Harness::ArsyCode,
+            "environment variables or headers outside the user scope",
+        );
+    }
+    if let Some(key) = references
+        .iter()
+        .find(|(_, value)| !value.contains("${"))
+        .map(|(key, _)| key)
+    {
+        return unsupported(
+            Harness::ArsyCode,
+            &format!(
+                "a literal value for `{key}`; reference an environment variable as ${{{key}}}"
+            ),
+        );
+    }
     let mut args = vec![
         "mcp".into(),
         "add".into(),
@@ -491,6 +512,9 @@ fn arsy_steps(spec: &ServerSpec, options: &RegistrationOptions) -> Result<Vec<St
             ]);
         }
         Transport::Sse | Transport::Ws => unreachable!("validated above"),
+    }
+    for (key, value) in references {
+        args.extend([flag.into(), format!("{key}={value}")]);
     }
     args.extend(spec.args.iter().cloned());
     let mut steps = Vec::new();
@@ -738,6 +762,53 @@ mod tests {
         with_env.env.insert("TOKEN".into(), "secret".into());
         assert!(matches!(
             delegated_steps(Harness::ArsyCode, &with_env, &options),
+            Err(Error::Unsupported { .. })
+        ));
+    }
+
+    #[test]
+    fn arsy_code_delegates_variable_references_at_user_scope() {
+        let mut options = opts(Path::new("/workspace"));
+        options.scope = Scope::User;
+        let mut stdio = ServerSpec::stdio("demo", "demo", vec!["--serve".into()]);
+        stdio.env.insert("TOKEN".into(), "${DEMO_TOKEN}".into());
+        let steps = delegated_steps(Harness::ArsyCode, &stdio, &options).expect("steps");
+        assert_eq!(
+            steps[0].args,
+            vec![
+                String::from("mcp"),
+                String::from("add"),
+                String::from("demo"),
+                String::from("--scope"),
+                String::from("user"),
+                String::from("--command"),
+                String::from("demo"),
+                String::from("--env"),
+                String::from("TOKEN=${DEMO_TOKEN}"),
+                String::from("--serve"),
+            ]
+        );
+
+        let mut http = ServerSpec {
+            name: "remote".into(),
+            transport: Transport::Http,
+            url: Some("https://example.test/mcp".into()),
+            ..Default::default()
+        };
+        http.headers
+            .insert("Authorization".into(), "Bearer ${API_TOKEN}".into());
+        let steps = delegated_steps(Harness::ArsyCode, &http, &options).expect("steps");
+        assert_eq!(
+            &steps[0].args[steps[0].args.len() - 2..],
+            [
+                String::from("--header"),
+                String::from("Authorization=Bearer ${API_TOKEN}"),
+            ]
+        );
+
+        options.scope = Scope::Project;
+        assert!(matches!(
+            delegated_steps(Harness::ArsyCode, &stdio, &options),
             Err(Error::Unsupported { .. })
         ));
     }
