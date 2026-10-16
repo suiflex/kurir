@@ -2,6 +2,14 @@
 
 All notable changes to Kurir are documented here.
 
+## [0.5.0](https://github.com/suiflex/kurir/compare/v0.4.0...v0.5.0) (2026-10-16)
+
+
+### Features
+
+* **registration:** pass ${VAR} env and headers to arsy mcp add ([3a060b9](https://github.com/suiflex/kurir/commit/3a060b959a8afe72506de43cab3dc0278ade5a50))
+* **registration:** pass ${VAR} env and headers to arsy mcp add ([8eae0bf](https://github.com/suiflex/kurir/commit/8eae0bf1baf31fa56c95ca6ccc0b3ca8c36fb5bd))
+
 ## [0.4.0](https://github.com/suiflex/kurir/compare/v0.3.0...v0.4.0) (2026-10-03)
 
 
