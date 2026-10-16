@@ -767,6 +767,53 @@ mod tests {
     }
 
     #[test]
+    fn arsy_code_delegates_variable_references_at_user_scope() {
+        let mut options = opts(Path::new("/workspace"));
+        options.scope = Scope::User;
+        let mut stdio = ServerSpec::stdio("demo", "demo", vec!["--serve".into()]);
+        stdio.env.insert("TOKEN".into(), "${DEMO_TOKEN}".into());
+        let steps = delegated_steps(Harness::ArsyCode, &stdio, &options).expect("steps");
+        assert_eq!(
+            steps[0].args,
+            vec![
+                String::from("mcp"),
+                String::from("add"),
+                String::from("demo"),
+                String::from("--scope"),
+                String::from("user"),
+                String::from("--command"),
+                String::from("demo"),
+                String::from("--env"),
+                String::from("TOKEN=${DEMO_TOKEN}"),
+                String::from("--serve"),
+            ]
+        );
+
+        let mut http = ServerSpec {
+            name: "remote".into(),
+            transport: Transport::Http,
+            url: Some("https://example.test/mcp".into()),
+            ..Default::default()
+        };
+        http.headers
+            .insert("Authorization".into(), "Bearer ${API_TOKEN}".into());
+        let steps = delegated_steps(Harness::ArsyCode, &http, &options).expect("steps");
+        assert_eq!(
+            &steps[0].args[steps[0].args.len() - 2..],
+            [
+                String::from("--header"),
+                String::from("Authorization=Bearer ${API_TOKEN}"),
+            ]
+        );
+
+        options.scope = Scope::Project;
+        assert!(matches!(
+            delegated_steps(Harness::ArsyCode, &stdio, &options),
+            Err(Error::Unsupported { .. })
+        ));
+    }
+
+    #[test]
     fn dry_run_does_not_write() {
         let dir = tempdir().expect("temp");
         let path = dir.path().join("mcp.json");
