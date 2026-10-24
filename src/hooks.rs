@@ -378,8 +378,17 @@ mod tests {
     #[test]
     fn harness_without_hooks_is_unsupported() {
         assert_eq!(hook_file(Harness::Zed), None);
+        assert_eq!(hook_file(Harness::Jcode), None);
         let error = add_hook(
             Harness::Zed,
+            &mut json!({}),
+            &spec(None),
+            Path::new("h.json"),
+        )
+        .expect_err("unsupported");
+        assert!(matches!(error, Error::Unsupported { .. }));
+        let error = add_hook(
+            Harness::Jcode,
             &mut json!({}),
             &spec(None),
             Path::new("h.json"),
