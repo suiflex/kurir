@@ -67,6 +67,7 @@ pub fn entry_for(harness: Harness, spec: &ServerSpec) -> Result<Value, Error> {
         Harness::OpenClaw => open_claw_entry(spec),
         Harness::Zed => zed_entry(spec),
         Harness::CopilotCli => copilot_entry(spec),
+        Harness::Jcode | Harness::Zcode => typed_standard_entry(harness, spec),
         _ => standard_entry(spec),
     }
 }
@@ -81,7 +82,13 @@ fn file_registration(
     spec: &ServerSpec,
     options: &RegistrationOptions,
 ) -> Result<RegistrationResult, Error> {
-    let path = target_path(harness, options)?;
+    if harness == Harness::Zcode
+        && options.scope == Scope::Project
+        && (!spec.env.is_empty() || !spec.headers.is_empty())
+    {
+        return unsupported(harness, "project MCP credentials; use user scope");
+    }
+    let path = resolved_target_path(harness, options)?;
     let entry = entry_for(harness, spec)?;
     let mut root = jsonc::load_object(&path)?;
     let servers = jsonc::ensure_object_path(&mut root, key_path(harness), &path)?;
@@ -133,6 +140,13 @@ fn result(
     }
 }
 
+fn resolved_target_path(harness: Harness, options: &RegistrationOptions) -> Result<PathBuf, Error> {
+    if matches!(harness, Harness::Jcode | Harness::Zcode) {
+        return new_harness_target_path(harness, options);
+    }
+    target_path(harness, options)
+}
+
 fn target_path(harness: Harness, options: &RegistrationOptions) -> Result<PathBuf, Error> {
     if let Some(path) = &options.config {
         return Ok(path.clone());
@@ -176,11 +190,36 @@ fn target_path(harness: Harness, options: &RegistrationOptions) -> Result<PathBu
     Ok(path)
 }
 
+fn new_harness_target_path(
+    harness: Harness,
+    options: &RegistrationOptions,
+) -> Result<PathBuf, Error> {
+    if harness == Harness::Jcode && options.scope != Scope::User {
+        return unsupported(harness, "project or local MCP registration");
+    }
+    if options.scope == Scope::Local {
+        return unsupported(harness, "local file scope");
+    }
+    if let Some(path) = &options.config {
+        return Ok(path.clone());
+    }
+    if options.scope == Scope::Project {
+        return Ok(options.cwd.join(".zcode/config.json"));
+    }
+    let home = env::home_dir().ok_or(Error::MissingArgument("home directory"))?;
+    Ok(match harness {
+        Harness::Jcode => home.join(".jcode/config.json"),
+        Harness::Zcode => home.join(".zcode/cli/config.json"),
+        _ => unreachable!("new harness target only"),
+    })
+}
+
 fn key_path(harness: Harness) -> &'static [&'static str] {
     match harness {
         Harness::OpenCode => &["mcp"],
-        Harness::OpenClaw => &["mcp", "servers"],
+        Harness::OpenClaw | Harness::Zcode => &["mcp", "servers"],
         Harness::Zed => &["context_servers"],
+        Harness::Jcode => &["mcp_servers"],
         _ => &["mcpServers"],
     }
 }
@@ -267,6 +306,17 @@ fn copilot_entry(spec: &ServerSpec) -> Result<Value, Error> {
     let mut entry = json!({"type":"stdio","command":spec.command,"args":spec.args});
     if !spec.env.is_empty() {
         entry["env"] = json!(spec.env);
+    }
+    Ok(entry)
+}
+
+fn typed_standard_entry(harness: Harness, spec: &ServerSpec) -> Result<Value, Error> {
+    if spec.transport == Transport::Ws {
+        return unsupported(harness, "ws transport registration");
+    }
+    let mut entry = standard_entry(spec)?;
+    if spec.transport == Transport::Stdio {
+        entry["type"] = json!("stdio");
     }
     Ok(entry)
 }
@@ -557,8 +607,11 @@ fn redacted_snippet(harness: Harness, spec: &ServerSpec) -> Value {
     let entry = entry_for(harness, spec).unwrap_or_else(|_| standard_entry_unchecked(spec));
     match harness {
         Harness::OpenCode => json!({"mcp":{spec.name.clone():redact(&entry)}}),
-        Harness::OpenClaw => json!({"mcp":{"servers":{spec.name.clone():redact(&entry)}}}),
+        Harness::OpenClaw | Harness::Zcode => {
+            json!({"mcp":{"servers":{spec.name.clone():redact(&entry)}}})
+        }
         Harness::Zed => json!({"context_servers":{spec.name.clone():redact(&entry)}}),
+        Harness::Jcode => json!({"mcp_servers":{spec.name.clone():redact(&entry)}}),
         _ => json!({"mcpServers":{spec.name.clone():redact(&entry)}}),
     }
 }
@@ -608,6 +661,15 @@ fn preview(program: &str, args: &[String], redacted: &[bool]) -> String {
 }
 
 fn doctor_one(harness: Harness, options: &RegistrationOptions) -> Result<DoctorReport, Error> {
+    if harness == Harness::Jcode && options.scope != Scope::User {
+        return Ok(DoctorReport {
+            harness: harness.id().into(),
+            kind: "file",
+            target: None,
+            available: false,
+            detail: "project or local MCP registration is unsupported".into(),
+        });
+    }
     if harness.is_snippet_only() {
         return Ok(DoctorReport {
             harness: harness.id().into(),
@@ -644,7 +706,7 @@ fn doctor_one(harness: Harness, options: &RegistrationOptions) -> Result<DoctorR
             },
         });
     }
-    let path = target_path(harness, options)?;
+    let path = resolved_target_path(harness, options)?;
     let exists = path.exists();
     let detail = if exists {
         jsonc::load_object(&path).map_or_else(
@@ -843,5 +905,98 @@ mod tests {
         )
         .expect_err("conflict");
         assert!(matches!(error, Error::Conflict { .. }));
+    }
+
+    #[test]
+    fn jcode_merges_user_config_and_rejects_project_scope() {
+        let dir = tempdir().expect("temp");
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{"model":"example","mcp_servers":{"other":{"type":"stdio","command":"other"}}}"#,
+        )
+        .expect("seed");
+        let mut options = opts(dir.path());
+        options.scope = Scope::User;
+        options.config = Some(path.clone());
+        let spec = ServerSpec::stdio("demo", "demo", vec!["mcp".into()]);
+        assert!(
+            register(Harness::Jcode, &spec, &options)
+                .expect("register")
+                .changed
+        );
+        let config: Value =
+            serde_json::from_str(&fs::read_to_string(&path).expect("read")).expect("json");
+        assert_eq!(config["model"], "example");
+        assert_eq!(config["mcp_servers"]["other"]["command"], "other");
+        assert_eq!(config["mcp_servers"]["demo"]["type"], "stdio");
+        assert!(
+            !register(Harness::Jcode, &spec, &options)
+                .expect("again")
+                .changed
+        );
+        options.scope = Scope::Project;
+        assert!(matches!(
+            register(Harness::Jcode, &spec, &options),
+            Err(Error::Unsupported { .. })
+        ));
+    }
+
+    #[test]
+    fn zcode_merges_native_config_and_rejects_project_credentials() {
+        let dir = tempdir().expect("temp");
+        let mut options = opts(dir.path());
+        let spec = ServerSpec::stdio("demo", "demo", vec![]);
+        let path = dir.path().join(".zcode/config.json");
+        assert!(
+            register(Harness::Zcode, &spec, &options)
+                .expect("register")
+                .changed
+        );
+        let config: Value =
+            serde_json::from_str(&fs::read_to_string(&path).expect("read")).expect("json");
+        assert_eq!(config["mcp"]["servers"]["demo"]["type"], "stdio");
+        assert!(
+            !register(Harness::Zcode, &spec, &options)
+                .expect("again")
+                .changed
+        );
+        options.dry_run = true;
+        let mut secret = spec.clone();
+        secret.env.insert("TOKEN".into(), "secret".into());
+        assert!(matches!(
+            register(Harness::Zcode, &secret, &options),
+            Err(Error::Unsupported { .. })
+        ));
+    }
+
+    #[test]
+    fn new_harness_dry_runs_do_not_write_and_reject_ws() {
+        let dir = tempdir().expect("temp");
+        for harness in [Harness::Jcode, Harness::Zcode] {
+            let path = dir.path().join(format!("{harness}.json"));
+            let options = RegistrationOptions {
+                scope: Scope::User,
+                config: Some(path.clone()),
+                dry_run: true,
+                ..opts(dir.path())
+            };
+            let spec = ServerSpec::stdio("demo", "demo", vec![]);
+            assert_eq!(
+                register(harness, &spec, &options).expect("dry run").action,
+                "dry-run"
+            );
+            assert!(!path.exists());
+            let ws = ServerSpec {
+                name: "remote".into(),
+                transport: Transport::Ws,
+                url: Some("wss://example.test/mcp".into()),
+                ..Default::default()
+            };
+            assert!(matches!(
+                entry_for(harness, &ws),
+                Err(Error::Unsupported { .. })
+            ));
+        }
     }
 }

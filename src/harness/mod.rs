@@ -22,10 +22,12 @@ pub enum Harness {
     Omp,
     AntigravityCli,
     AntigravityDesktop,
+    Jcode,
+    Zcode,
 }
 
 impl Harness {
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 19] = [
         Self::ArsyCode,
         Self::ClaudeCode,
         Self::ClaudeCodeCli,
@@ -43,9 +45,11 @@ impl Harness {
         Self::Omp,
         Self::AntigravityCli,
         Self::AntigravityDesktop,
+        Self::Jcode,
+        Self::Zcode,
     ];
 
-    const IDS: [&'static str; 17] = [
+    const IDS: [&'static str; 19] = [
         "arsy-code",
         "claude-code",
         "claude-code-cli",
@@ -63,9 +67,11 @@ impl Harness {
         "omp",
         "antigravity-cli",
         "antigravity-desktop",
+        "jcode",
+        "zcode",
     ];
 
-    const SUMMARIES: [&'static str; 17] = [
+    const SUMMARIES: [&'static str; 19] = [
         "delegate to arsy mcp add",
         "merge ~/.claude.json or project .mcp.json",
         "delegate to claude mcp add",
@@ -83,6 +89,8 @@ impl Harness {
         "print a portable snippet",
         "merge Antigravity CLI mcp_config.json",
         "merge Antigravity Desktop mcp_config.json",
+        "merge ~/.jcode/config.json mcp_servers",
+        "merge ZCode config.json mcp.servers",
     ];
 
     const ALIASES: [(&'static str, Self); 6] = [
