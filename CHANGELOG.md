@@ -2,6 +2,14 @@
 
 All notable changes to Kurir are documented here.
 
+## [0.6.0](https://github.com/suiflex/kurir/compare/v0.5.0...v0.6.0) (2026-10-25)
+
+
+### Features
+
+* add jcode and zcode harness support ([c554df2](https://github.com/suiflex/kurir/commit/c554df2ef65c2cecafae7188d3b071d00e5ad05b))
+* add jcode and zcode harness support ([1ceacc9](https://github.com/suiflex/kurir/commit/1ceacc9f713539e2a953941ff2fa90153556c0fb))
+
 ## [0.5.0](https://github.com/suiflex/kurir/compare/v0.4.0...v0.5.0) (2026-10-16)
 
 
