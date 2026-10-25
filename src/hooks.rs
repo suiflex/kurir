@@ -47,14 +47,14 @@ impl HookSpec {
     }
 }
 
-/// Hook configuration file for a harness, relative to the project root or the
-/// home directory. Both scopes use the same relative path.
+/// Hook configuration file for a harness, relative to the scope root.
 #[must_use]
 pub const fn hook_file(harness: Harness) -> Option<&'static str> {
     match harness {
         Harness::ClaudeCode | Harness::ClaudeCodeCli => Some(".claude/settings.json"),
         Harness::Codex => Some(".codex/hooks.json"),
         Harness::Cursor => Some(".cursor/hooks.json"),
+        Harness::Zcode => Some(".zcode/cli/config.json"),
         _ => None,
     }
 }
@@ -66,6 +66,12 @@ pub const fn hook_file(harness: Harness) -> Option<&'static str> {
 /// Returns an error if the harness does not support hooks or target path
 /// cannot be resolved.
 pub fn hook_path(harness: Harness, options: &RegistrationOptions) -> Result<PathBuf, Error> {
+    if harness == Harness::Zcode && options.scope != Scope::User {
+        return Err(Error::Unsupported {
+            harness: harness.id().to_owned(),
+            detail: "project or local hooks are not executed by ZCode".to_owned(),
+        });
+    }
     if let Some(path) = &options.config {
         return Ok(path.clone());
     }
@@ -89,8 +95,12 @@ pub fn hook_path(harness: Harness, options: &RegistrationOptions) -> Result<Path
 /// Check if a hook matching `spec` is already configured in `document`.
 #[must_use]
 pub fn is_hook_present(harness: Harness, document: &Value, spec: &HookSpec) -> bool {
-    let Some(handlers) = document
-        .get("hooks")
+    let events = if harness == Harness::Zcode {
+        document.get("hooks").and_then(|h| h.get("events"))
+    } else {
+        document.get("hooks")
+    };
+    let Some(handlers) = events
         .and_then(|h| h.get(&spec.event))
         .and_then(Value::as_array)
     else {
@@ -102,14 +112,18 @@ pub fn is_hook_present(harness: Harness, document: &Value, spec: &HookSpec) -> b
             h.get("command").and_then(Value::as_str) == Some(&spec.command)
                 && h.get("matcher").and_then(Value::as_str) == spec.matcher.as_deref()
         }),
-        Harness::ClaudeCode | Harness::ClaudeCodeCli | Harness::Codex => handlers.iter().any(|h| {
-            let matcher_match = h.get("matcher").and_then(Value::as_str) == spec.matcher.as_deref();
-            let command_match = h.get("hooks").and_then(Value::as_array).is_some_and(|sub| {
-                sub.iter()
-                    .any(|item| item.get("command").and_then(Value::as_str) == Some(&spec.command))
-            });
-            matcher_match && command_match
-        }),
+        Harness::ClaudeCode | Harness::ClaudeCodeCli | Harness::Codex | Harness::Zcode => {
+            handlers.iter().any(|h| {
+                let matcher_match =
+                    h.get("matcher").and_then(Value::as_str) == spec.matcher.as_deref();
+                let command_match = h.get("hooks").and_then(Value::as_array).is_some_and(|sub| {
+                    sub.iter().any(|item| {
+                        item.get("command").and_then(Value::as_str) == Some(&spec.command)
+                    })
+                });
+                matcher_match && command_match
+            })
+        }
         _ => false,
     }
 }
@@ -129,6 +143,29 @@ pub fn add_hook(
     spec: &HookSpec,
     path: &Path,
 ) -> Result<(), Error> {
+    if harness == Harness::Zcode {
+        let hooks = jsonc::ensure_object_path(document, &["hooks"], path)?;
+        hooks.insert("enabled".to_owned(), json!(true));
+        let events = jsonc::ensure_object_path(document, &["hooks", "events"], path)?;
+        let handlers = events
+            .entry(spec.event.clone())
+            .or_insert_with(|| json!([]))
+            .as_array_mut()
+            .ok_or_else(|| Error::InvalidConfigField {
+                path: path.display().to_string(),
+                field: format!("hooks.events.{}", spec.event),
+            })?;
+        let mut handler = json!({"hooks": [{
+            "type": "command",
+            "command": spec.command,
+            "timeout": spec.timeout_seconds,
+        }]});
+        if let Some(matcher) = &spec.matcher {
+            handler["matcher"] = json!(matcher);
+        }
+        handlers.push(handler);
+        return Ok(());
+    }
     let handler = match harness {
         Harness::ClaudeCode | Harness::ClaudeCodeCli | Harness::Codex => {
             let mut handler = json!({"hooks": [{
@@ -193,6 +230,30 @@ pub fn register_hook(
     let mut root = jsonc::load_object(&path)?;
 
     if is_hook_present(harness, &root, spec) {
+        if harness == Harness::Zcode && root["hooks"]["enabled"] != true {
+            if options.print {
+                println!("{{\"hooks\":{{\"enabled\":true}}}}");
+            }
+            if options.dry_run {
+                return Ok(RegistrationResult {
+                    harness: harness.id().to_owned(),
+                    name: spec.event.clone(),
+                    target: Some(path),
+                    changed: false,
+                    action: "dry-run".to_owned(),
+                });
+            }
+            jsonc::backup(&path)?;
+            root["hooks"]["enabled"] = json!(true);
+            jsonc::write_object(&path, &root)?;
+            return Ok(RegistrationResult {
+                harness: harness.id().to_owned(),
+                name: spec.event.clone(),
+                target: Some(path),
+                changed: true,
+                action: "registered".to_owned(),
+            });
+        }
         return Ok(RegistrationResult {
             harness: harness.id().to_owned(),
             name: spec.event.clone(),
@@ -317,8 +378,17 @@ mod tests {
     #[test]
     fn harness_without_hooks_is_unsupported() {
         assert_eq!(hook_file(Harness::Zed), None);
+        assert_eq!(hook_file(Harness::Jcode), None);
         let error = add_hook(
             Harness::Zed,
+            &mut json!({}),
+            &spec(None),
+            Path::new("h.json"),
+        )
+        .expect_err("unsupported");
+        assert!(matches!(error, Error::Unsupported { .. }));
+        let error = add_hook(
+            Harness::Jcode,
             &mut json!({}),
             &spec(None),
             Path::new("h.json"),
@@ -382,5 +452,69 @@ mod tests {
             timeout_seconds: 5,
         };
         assert!(register_hook(Harness::Cursor, &invalid, &options).is_err());
+    }
+
+    #[test]
+    fn zcode_hook_uses_user_config_and_rejects_project_scope() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("config.json");
+        std::fs::write(&path, r#"{"mcp":{"servers":{"demo":{}}}}"#).expect("seed");
+        let mut options = RegistrationOptions {
+            config: Some(path.clone()),
+            ..RegistrationOptions::default()
+        };
+        let hook = spec(Some("Write"));
+        assert!(
+            register_hook(Harness::Zcode, &hook, &options)
+                .expect("register")
+                .changed
+        );
+        let config: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("json");
+        assert_eq!(config["hooks"]["enabled"], true);
+        assert_eq!(
+            config["hooks"]["events"]["PreToolUse"][0]["matcher"],
+            "Write"
+        );
+        assert!(config["mcp"]["servers"]["demo"].is_object());
+        assert!(
+            !register_hook(Harness::Zcode, &hook, &options)
+                .expect("again")
+                .changed
+        );
+        options.scope = Scope::Project;
+        assert!(matches!(
+            register_hook(Harness::Zcode, &hook, &options),
+            Err(Error::Unsupported { .. })
+        ));
+    }
+
+    #[test]
+    fn zcode_existing_hook_enables_without_duplication() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("config.json");
+        let hook = spec(None);
+        let mut document = json!({});
+        add_hook(Harness::Zcode, &mut document, &hook, &path).expect("seed hook");
+        document["hooks"]["enabled"] = json!(false);
+        std::fs::write(&path, serde_json::to_vec(&document).expect("json")).expect("seed");
+        let options = RegistrationOptions {
+            config: Some(path.clone()),
+            ..RegistrationOptions::default()
+        };
+        assert!(
+            register_hook(Harness::Zcode, &hook, &options)
+                .expect("enable")
+                .changed
+        );
+        let result: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("json");
+        assert_eq!(result["hooks"]["enabled"], true);
+        assert_eq!(
+            result["hooks"]["events"]["PreToolUse"]
+                .as_array()
+                .map(Vec::len),
+            Some(1)
+        );
     }
 }

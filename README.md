@@ -194,6 +194,18 @@ kurir skill \
 | Hermes | `hermes mcp add` |
 | Antigravity CLI/Desktop | JSON merge |
 | OMP | Redacted portable snippet |
+| jcode | `~/.jcode/config.json` `mcp_servers` merge (user scope) |
+| ZCode | `.zcode/config.json` or `~/.zcode/cli/config.json` `mcp.servers` merge |
+
+jcode MCP registration uses the user scope. Kurir supports project and user
+skills in `.jcode/skills`; jcode lifecycle hooks are unsupported.
+
+ZCode skills use `.zcode/skills` in each scope. ZCode hooks use the user-level
+`~/.zcode/cli/config.json`; project-level hooks are not executed by ZCode.
+ZCode ignores `.agents/mcp.json` within a scope when its native config defines
+any MCP servers, so Kurir writes the native config directly.
+Project-scope ZCode MCP registration rejects environment values and headers;
+put credential-bearing servers in user scope.
 
 Inspect the registry and local readiness:
 

@@ -27,6 +27,8 @@ pub const fn skills_dir(harness: Harness, scope: Scope) -> Option<&'static str> 
         ) => Some(".agents/skills"),
         (Harness::OpenCode, Scope::User) => Some(".config/opencode/skills"),
         (Harness::Hermes, Scope::User) => Some(".hermes/skills"),
+        (Harness::Jcode, Scope::Project | Scope::User) => Some(".jcode/skills"),
+        (Harness::Zcode, Scope::Project | Scope::User) => Some(".zcode/skills"),
         (Harness::OpenClaw, Scope::User) => Some(".openclaw/skills"),
         (Harness::AntigravityCli, Scope::User) => Some(".gemini/antigravity-cli/skills"),
         _ => None,
@@ -225,6 +227,10 @@ mod tests {
             ),
             (Harness::ClaudeCode, Scope::Local, None),
             (Harness::Zed, Scope::User, None),
+            (Harness::Jcode, Scope::Project, Some(".jcode/skills")),
+            (Harness::Jcode, Scope::User, Some(".jcode/skills")),
+            (Harness::Zcode, Scope::Project, Some(".zcode/skills")),
+            (Harness::Zcode, Scope::User, Some(".zcode/skills")),
         ];
         for (harness, scope, expected) in cases {
             assert_eq!(skills_dir(harness, scope), expected, "{harness} {scope:?}");
