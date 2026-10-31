@@ -2,6 +2,14 @@
 
 All notable changes to Kurir are documented here.
 
+## [0.6.1](https://github.com/suiflex/kurir/compare/v0.6.0...v0.6.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **doctor:** resolve arsy-code delegated CLI instead of panicking ([2d79e1c](https://github.com/suiflex/kurir/commit/2d79e1c2f2e7db48b0fdca286d66fa3d7fefae1b))
+* **doctor:** resolve arsy-code delegated CLI instead of panicking ([a449fb4](https://github.com/suiflex/kurir/commit/a449fb4108cef5b9bcf43dadf7276fec556b13fd))
+
 ## [0.6.0](https://github.com/suiflex/kurir/compare/v0.5.0...v0.6.0) (2026-10-25)
 
 
