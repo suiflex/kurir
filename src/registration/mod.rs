@@ -732,6 +732,17 @@ const fn delegated_program(harness: Harness) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_delegated_harness_has_a_doctor_program() {
+        for harness in Harness::ALL {
+            assert_eq!(
+                harness.is_delegated(),
+                delegated_program(harness).is_some(),
+                "{harness} delegation and doctor program disagree"
+            );
+        }
+    }
     use std::{fs, path::Path};
     use tempfile::tempdir;
 
