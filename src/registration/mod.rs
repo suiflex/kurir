@@ -679,15 +679,7 @@ fn doctor_one(harness: Harness, options: &RegistrationOptions) -> Result<DoctorR
             detail: "portable snippet available".into(),
         });
     }
-    if harness.is_delegated() {
-        let program = match harness {
-            Harness::ClaudeCodeCli => "claude",
-            Harness::Codex => "codex",
-            Harness::GeminiCli => "gemini",
-            Harness::Hermes => "hermes",
-            Harness::Vscode => "code",
-            _ => unreachable!(),
-        };
+    if let Some(program) = delegated_program(harness) {
         let available = Command::new(program)
             .arg("--version")
             .stdout(Stdio::null())
@@ -723,6 +715,18 @@ fn doctor_one(harness: Harness, options: &RegistrationOptions) -> Result<DoctorR
         available: !exists || detail == "configuration exists and is valid",
         detail,
     })
+}
+
+const fn delegated_program(harness: Harness) -> Option<&'static str> {
+    match harness {
+        Harness::ArsyCode => Some("arsy"),
+        Harness::ClaudeCodeCli => Some("claude"),
+        Harness::Codex => Some("codex"),
+        Harness::GeminiCli => Some("gemini"),
+        Harness::Hermes => Some("hermes"),
+        Harness::Vscode => Some("code"),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
