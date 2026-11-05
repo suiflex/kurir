@@ -353,13 +353,21 @@ fn delegated(
     options: &RegistrationOptions,
 ) -> Result<RegistrationResult, Error> {
     let steps = delegated_steps(harness, spec, options)?;
+    if !run_steps(steps, options)? {
+        return Ok(result(harness, spec, None, false, "dry-run"));
+    }
+    Ok(result(harness, spec, None, true, "registered"))
+}
+
+/// Preview and execute delegated steps. Returns `false` for a dry run.
+fn run_steps(steps: Vec<Step>, options: &RegistrationOptions) -> Result<bool, Error> {
     if options.print || options.dry_run {
         for step in &steps {
             println!("$ {}", preview(&step.program, &step.args, &step.redacted));
         }
     }
     if options.dry_run {
-        return Ok(result(harness, spec, None, false, "dry-run"));
+        return Ok(false);
     }
     for step in steps {
         let mut command = Command::new(&step.program);
@@ -391,7 +399,7 @@ fn delegated(
             });
         }
     }
-    Ok(result(harness, spec, None, true, "registered"))
+    Ok(true)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -513,11 +521,7 @@ fn arsy_steps(spec: &ServerSpec, options: &RegistrationOptions) -> Result<Vec<St
     if !matches!(spec.transport, Transport::Stdio | Transport::Http) {
         return unsupported(Harness::ArsyCode, "sse or ws transport");
     }
-    let scope = match options.scope {
-        Scope::User => "user",
-        Scope::Project => "workspace",
-        Scope::Local => return unsupported(Harness::ArsyCode, "local file scope"),
-    };
+    let scope = arsy_scope(options.scope)?;
     // ARSY stores `${NAME}` references only, and only in the user file: the
     // secret stays in the environment, and a repository file may not read it.
     let (flag, references) = match spec.transport {
@@ -593,6 +597,106 @@ fn arsy_steps(spec: &ServerSpec, options: &RegistrationOptions) -> Result<Vec<St
         ignore_failure: false,
     });
     Ok(steps)
+}
+
+fn arsy_scope(scope: Scope) -> Result<&'static str, Error> {
+    match scope {
+        Scope::User => Ok("user"),
+        Scope::Project => Ok("workspace"),
+        Scope::Local => unsupported(Harness::ArsyCode, "local file scope"),
+    }
+}
+
+/// Remove one server from a harness.
+///
+/// Removing a server that is not configured succeeds without writing.
+///
+/// # Errors
+/// Returns an error when the name is invalid, the harness cannot remove
+/// servers, or config I/O or delegated execution fails.
+pub fn unregister(
+    harness: Harness,
+    name: &str,
+    options: &RegistrationOptions,
+) -> Result<RegistrationResult, Error> {
+    ServerSpec::validate_name(name)?;
+    let spec = ServerSpec {
+        name: name.to_owned(),
+        ..ServerSpec::default()
+    };
+    if harness.is_snippet_only() {
+        return unsupported(harness, "unregistration; remove the snippet manually");
+    }
+    if harness.is_delegated() {
+        if !run_steps(removal_steps(harness, name, options)?, options)? {
+            return Ok(result(harness, &spec, None, false, "dry-run"));
+        }
+        return Ok(result(harness, &spec, None, true, "unregistered"));
+    }
+    let path = resolved_target_path(harness, options)?;
+    let mut root = jsonc::load_object(&path)?;
+    let pointer = format!("/{}", key_path(harness).join("/"));
+    let Some(removed) = root
+        .pointer_mut(&pointer)
+        .and_then(Value::as_object_mut)
+        .and_then(|servers| servers.remove(name))
+    else {
+        return Ok(result(harness, &spec, Some(path), false, "not-configured"));
+    };
+    if options.print {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({"remove": {name: redact(&removed)}}))
+                .map_err(|e| Error::Update(e.to_string()))?
+        );
+    }
+    if options.dry_run {
+        return Ok(result(harness, &spec, Some(path), false, "dry-run"));
+    }
+    jsonc::backup(&path)?;
+    jsonc::write_object(&path, &root)?;
+    Ok(result(harness, &spec, Some(path), true, "unregistered"))
+}
+
+// ponytail: only CLIs whose `mcp remove` was verified are delegated; add
+// gemini-cli and hermes here once their remove commands are confirmed.
+fn removal_steps(
+    harness: Harness,
+    name: &str,
+    options: &RegistrationOptions,
+) -> Result<Vec<Step>, Error> {
+    let (program, args): (&str, Vec<String>) = match harness {
+        Harness::ClaudeCodeCli => (
+            "claude",
+            vec![
+                "mcp".into(),
+                "remove".into(),
+                "--scope".into(),
+                scope_name(options.scope).into(),
+                name.into(),
+            ],
+        ),
+        Harness::Codex => ("codex", vec!["mcp".into(), "remove".into(), name.into()]),
+        Harness::ArsyCode => (
+            "arsy",
+            vec![
+                "mcp".into(),
+                "remove".into(),
+                name.into(),
+                "--scope".into(),
+                arsy_scope(options.scope)?.into(),
+            ],
+        ),
+        _ => return unsupported(harness, "delegated unregistration"),
+    };
+    Ok(vec![Step {
+        program: program.to_owned(),
+        redacted: vec![false; args.len()],
+        args,
+        env: BTreeMap::new(),
+        cwd: Some(options.cwd.clone()),
+        ignore_failure: false,
+    }])
 }
 
 fn scope_name(scope: Scope) -> &'static str {
@@ -771,6 +875,112 @@ mod tests {
             serde_json::from_str(&fs::read_to_string(path).expect("output")).expect("json");
         assert!(output["mcpServers"]["other"].is_object());
         assert_eq!(output["mcpServers"]["demo"]["command"], "demo");
+    }
+
+    #[test]
+    fn unregister_removes_only_the_named_server() {
+        let dir = tempdir().expect("temp");
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{"mcp":{"servers":{"demo":{"command":"demo"},"other":{"command":"other"}}}}"#,
+        )
+        .expect("seed");
+        let mut options = opts(dir.path());
+        options.config = Some(path.clone());
+
+        options.dry_run = true;
+        let dry = unregister(Harness::OpenClaw, "demo", &options).expect("dry run");
+        assert_eq!((dry.action.as_str(), dry.changed), ("dry-run", false));
+        assert!(fs::read_to_string(&path).expect("read").contains("demo"));
+
+        options.dry_run = false;
+        let removed = unregister(Harness::OpenClaw, "demo", &options).expect("remove");
+        assert_eq!(
+            (removed.action.as_str(), removed.changed),
+            ("unregistered", true)
+        );
+        let config: Value =
+            serde_json::from_str(&fs::read_to_string(&path).expect("read")).expect("json");
+        assert!(config["mcp"]["servers"].get("demo").is_none());
+        assert_eq!(config["mcp"]["servers"]["other"]["command"], "other");
+        assert!(dir.path().join("config.json.bak").exists());
+
+        let again = unregister(Harness::OpenClaw, "demo", &options).expect("again");
+        assert_eq!(
+            (again.action.as_str(), again.changed),
+            ("not-configured", false)
+        );
+    }
+
+    #[test]
+    fn unregister_removes_entry_for_every_file_harness() {
+        let dir = tempdir().expect("temp");
+        let file_harnesses = Harness::ALL
+            .into_iter()
+            .filter(|harness| !harness.is_delegated() && !harness.is_snippet_only());
+        for harness in file_harnesses {
+            let path = dir.path().join(format!("{harness}.json"));
+            let mut root = json!({"demo": {"command": "demo"}, "other": {"command": "other"}});
+            for key in key_path(harness).iter().rev() {
+                root = json!({ *key: root });
+            }
+            fs::write(&path, root.to_string()).expect("seed");
+            let options = RegistrationOptions {
+                scope: Scope::User,
+                config: Some(path.clone()),
+                ..opts(dir.path())
+            };
+            let result = unregister(harness, "demo", &options).expect("unregister");
+            assert!(result.changed, "{harness} did not remove the entry");
+            let config: Value =
+                serde_json::from_str(&fs::read_to_string(&path).expect("read")).expect("json");
+            let pointer = format!("/{}", key_path(harness).join("/"));
+            let servers = config.pointer(&pointer).expect("servers");
+            assert!(servers.get("demo").is_none(), "{harness} kept the entry");
+            assert!(
+                servers.get("other").is_some(),
+                "{harness} dropped a sibling"
+            );
+        }
+    }
+
+    #[test]
+    fn unregister_missing_config_does_not_create_it() {
+        let dir = tempdir().expect("temp");
+        let path = dir.path().join("absent.json");
+        let mut options = opts(dir.path());
+        options.config = Some(path.clone());
+        let result = unregister(Harness::Cursor, "demo", &options).expect("no-op");
+        assert_eq!(result.action, "not-configured");
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn unregister_delegates_only_to_verified_clis() {
+        let options = opts(Path::new("/workspace"));
+        let steps = |harness| removal_steps(harness, "demo", &options).expect("steps");
+        assert_eq!(
+            steps(Harness::ClaudeCodeCli)[0].args,
+            ["mcp", "remove", "--scope", "project", "demo"]
+        );
+        assert_eq!(steps(Harness::Codex)[0].args, ["mcp", "remove", "demo"]);
+        assert_eq!(
+            steps(Harness::ArsyCode)[0].args,
+            ["mcp", "remove", "demo", "--scope", "workspace"]
+        );
+        for harness in [
+            Harness::GeminiCli,
+            Harness::Hermes,
+            Harness::Vscode,
+            Harness::Omp,
+        ] {
+            assert!(matches!(
+                unregister(harness, "demo", &options),
+                Err(Error::Unsupported { .. })
+            ));
+        }
+        assert!(unregister(Harness::Cursor, "bad name", &options).is_err());
     }
 
     #[test]

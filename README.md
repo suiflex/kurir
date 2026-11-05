@@ -139,6 +139,33 @@ kurir register \
 
 Kurir redacts environment values and headers in previews. Registration writes a `.bak` copy before replacing an existing configuration and refuses conflicts unless `--force` is explicit.
 
+## Unregister a server
+
+Remove a server by name:
+
+```sh
+kurir unregister \
+  --client cursor \
+  --name my-server
+```
+
+`unregister` takes the same `--scope`, `--config`, `--cwd`, `--dry-run`, and
+`--print` flags as `register`. File-based harnesses drop only the named entry
+and write a `.bak` copy first. Removing a server that is not configured is a
+no-op that reports `not-configured`.
+
+Delegated harnesses use the harness's own remove command:
+
+| Harness | Command |
+| --- | --- |
+| `claude-code-cli` | `claude mcp remove --scope <scope> <name>` |
+| `codex` | `codex mcp remove <name>` |
+| `arsy-code` | `arsy mcp remove <name> --scope <user\|workspace>` |
+
+`gemini-cli`, `hermes`, and `vscode` report unsupported until their remove
+commands are verified. Snippet-only harnesses (`omp`) have nothing for Kurir
+to remove.
+
 ## Register lifecycle hooks
 
 Register a lifecycle hook with a supported harness (e.g. Cursor, Claude Code, Codex):

@@ -64,20 +64,7 @@ impl ServerSpec {
     ///
     /// Returns an error when required command or URL fields are missing or mixed.
     pub fn validate(&self) -> Result<(), Error> {
-        if self.name.trim().is_empty() {
-            return Err(Error::InvalidArgument {
-                field: "name",
-                value: self.name.clone(),
-                expected: "a non-empty server name",
-            });
-        }
-        if self.name.chars().any(char::is_whitespace) {
-            return Err(Error::InvalidArgument {
-                field: "name",
-                value: self.name.clone(),
-                expected: "a name without whitespace",
-            });
-        }
+        Self::validate_name(&self.name)?;
         if self.transport.is_remote() {
             if self.url.as_deref().is_none_or(str::is_empty) {
                 return Err(Error::MissingArgument("url for a remote transport"));
@@ -91,6 +78,29 @@ impl ServerSpec {
             }
         } else if self.command.as_deref().is_none_or(str::is_empty) {
             return Err(Error::MissingArgument("command for stdio transport"));
+        }
+        Ok(())
+    }
+
+    /// Validate a server name on its own, for operations that need no transport.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the name is empty or contains whitespace.
+    pub fn validate_name(name: &str) -> Result<(), Error> {
+        if name.trim().is_empty() {
+            return Err(Error::InvalidArgument {
+                field: "name",
+                value: name.to_owned(),
+                expected: "a non-empty server name",
+            });
+        }
+        if name.chars().any(char::is_whitespace) {
+            return Err(Error::InvalidArgument {
+                field: "name",
+                value: name.to_owned(),
+                expected: "a name without whitespace",
+            });
         }
         Ok(())
     }
