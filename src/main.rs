@@ -5,7 +5,7 @@ use kurir::{
     Harness, HookSpec, RegistrationOptions, Scope, ServerSpec, Transport, install_skill,
     register_hook,
     registration::{entry_for, register, snippet_for},
-    update,
+    unregister, update,
 };
 #[derive(Debug, Parser)]
 #[command(
@@ -22,6 +22,8 @@ struct Cli {
 enum Command {
     /// Register one MCP server with a harness.
     Register(Box<RegisterArgs>),
+    /// Remove one MCP server from a harness.
+    Unregister(UnregisterArgs),
     /// Register one lifecycle hook with a harness.
     Hook(Box<HookArgs>),
     /// Install a skill into a harness skills directory.
@@ -155,6 +157,31 @@ struct RegisterArgs {
 }
 
 #[derive(Debug, Args)]
+struct UnregisterArgs {
+    /// Harness adapter to use. `--harness` is an alias for `--client`.
+    #[arg(long, alias = "harness")]
+    client: String,
+    /// Name of the server to remove.
+    #[arg(long)]
+    name: String,
+    /// Registration scope.
+    #[arg(long, default_value = "user")]
+    scope: String,
+    /// Override the harness configuration path.
+    #[arg(long)]
+    config: Option<PathBuf>,
+    /// Working directory used for project scope and delegated CLIs.
+    #[arg(long, default_value = ".")]
+    cwd: PathBuf,
+    /// Show the redacted entry or delegated command being removed.
+    #[arg(long)]
+    print: bool,
+    /// Validate and preview without writing or invoking a harness CLI.
+    #[arg(long)]
+    dry_run: bool,
+}
+
+#[derive(Debug, Args)]
 struct DoctorArgs {
     /// Inspect one harness instead of the complete registry.
     #[arg(long)]
@@ -183,6 +210,7 @@ fn main() -> ExitCode {
 fn run() -> Result<(), kurir::Error> {
     match Cli::parse().command {
         Command::Register(args) => register_command(*args),
+        Command::Unregister(args) => unregister_command(args),
         Command::Hook(args) => hook_command(*args),
         Command::Skill(args) => skill_command(*args),
         Command::Doctor(args) => doctor_command(args),
@@ -306,6 +334,36 @@ fn register_command(args: RegisterArgs) -> Result<(), kurir::Error> {
             })?
         );
     } else if !args.print && !args.dry_run {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "harness": result.harness,
+                "name": result.name,
+                "target": result.target,
+                "changed": result.changed,
+                "action": result.action,
+            }))
+            .map_err(|source| kurir::Error::InvalidJson {
+                path: "stdout".to_owned(),
+                source,
+            })?
+        );
+    }
+    Ok(())
+}
+
+fn unregister_command(args: UnregisterArgs) -> Result<(), kurir::Error> {
+    let harness = args.client.parse::<Harness>()?;
+    let options = RegistrationOptions {
+        scope: Scope::parse(&args.scope)?,
+        config: args.config,
+        cwd: absolute_path(args.cwd)?,
+        force: false,
+        dry_run: args.dry_run,
+        print: args.print,
+    };
+    let result = unregister(harness, &args.name, &options)?;
+    if !args.print && !args.dry_run {
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
