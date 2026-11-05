@@ -2,6 +2,15 @@
 
 All notable changes to Kurir are documented here.
 
+## [0.7.0](https://github.com/suiflex/kurir/compare/v0.6.1...v0.7.0) (2026-11-05)
+
+
+### Features
+
+* add unregister command for MCP servers ([bf86a7a](https://github.com/suiflex/kurir/commit/bf86a7ac8e94312f9bf8caf7d062c6edc060e4cd))
+* **cli:** add unregister command ([c78e7e6](https://github.com/suiflex/kurir/commit/c78e7e62d7af2b4587fe1ff72a1b291d5b1449fc))
+* **registration:** add unregister for MCP servers ([57bc0a4](https://github.com/suiflex/kurir/commit/57bc0a4909f160cd80a381f1ba31465108955936))
+
 ## [0.6.1](https://github.com/suiflex/kurir/compare/v0.6.0...v0.6.1) (2026-10-31)
 
 
