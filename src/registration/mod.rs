@@ -914,6 +914,38 @@ mod tests {
     }
 
     #[test]
+    fn unregister_removes_entry_for_every_file_harness() {
+        let dir = tempdir().expect("temp");
+        let file_harnesses = Harness::ALL
+            .into_iter()
+            .filter(|harness| !harness.is_delegated() && !harness.is_snippet_only());
+        for harness in file_harnesses {
+            let path = dir.path().join(format!("{harness}.json"));
+            let mut root = json!({"demo": {"command": "demo"}, "other": {"command": "other"}});
+            for key in key_path(harness).iter().rev() {
+                root = json!({ *key: root });
+            }
+            fs::write(&path, root.to_string()).expect("seed");
+            let options = RegistrationOptions {
+                scope: Scope::User,
+                config: Some(path.clone()),
+                ..opts(dir.path())
+            };
+            let result = unregister(harness, "demo", &options).expect("unregister");
+            assert!(result.changed, "{harness} did not remove the entry");
+            let config: Value =
+                serde_json::from_str(&fs::read_to_string(&path).expect("read")).expect("json");
+            let pointer = format!("/{}", key_path(harness).join("/"));
+            let servers = config.pointer(&pointer).expect("servers");
+            assert!(servers.get("demo").is_none(), "{harness} kept the entry");
+            assert!(
+                servers.get("other").is_some(),
+                "{harness} dropped a sibling"
+            );
+        }
+    }
+
+    #[test]
     fn unregister_missing_config_does_not_create_it() {
         let dir = tempdir().expect("temp");
         let path = dir.path().join("absent.json");
