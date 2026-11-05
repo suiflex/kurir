@@ -472,6 +472,13 @@ mod tests {
     }
 
     #[test]
+    fn unregister_args_can_be_parsed() {
+        let cli = Cli::try_parse_from(["kurir", "unregister", "--client", "cursor", "--name", "x"])
+            .expect("parse unregister");
+        assert!(matches!(cli.command, Command::Unregister(_)));
+    }
+
+    #[test]
     fn skill_args_can_be_parsed() {
         let cli = Cli::try_parse_from([
             "kurir",

@@ -878,6 +878,80 @@ mod tests {
     }
 
     #[test]
+    fn unregister_removes_only_the_named_server() {
+        let dir = tempdir().expect("temp");
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{"mcp":{"servers":{"demo":{"command":"demo"},"other":{"command":"other"}}}}"#,
+        )
+        .expect("seed");
+        let mut options = opts(dir.path());
+        options.config = Some(path.clone());
+
+        options.dry_run = true;
+        let dry = unregister(Harness::OpenClaw, "demo", &options).expect("dry run");
+        assert_eq!((dry.action.as_str(), dry.changed), ("dry-run", false));
+        assert!(fs::read_to_string(&path).expect("read").contains("demo"));
+
+        options.dry_run = false;
+        let removed = unregister(Harness::OpenClaw, "demo", &options).expect("remove");
+        assert_eq!(
+            (removed.action.as_str(), removed.changed),
+            ("unregistered", true)
+        );
+        let config: Value =
+            serde_json::from_str(&fs::read_to_string(&path).expect("read")).expect("json");
+        assert!(config["mcp"]["servers"].get("demo").is_none());
+        assert_eq!(config["mcp"]["servers"]["other"]["command"], "other");
+        assert!(dir.path().join("config.json.bak").exists());
+
+        let again = unregister(Harness::OpenClaw, "demo", &options).expect("again");
+        assert_eq!(
+            (again.action.as_str(), again.changed),
+            ("not-configured", false)
+        );
+    }
+
+    #[test]
+    fn unregister_missing_config_does_not_create_it() {
+        let dir = tempdir().expect("temp");
+        let path = dir.path().join("absent.json");
+        let mut options = opts(dir.path());
+        options.config = Some(path.clone());
+        let result = unregister(Harness::Cursor, "demo", &options).expect("no-op");
+        assert_eq!(result.action, "not-configured");
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn unregister_delegates_only_to_verified_clis() {
+        let options = opts(Path::new("/workspace"));
+        let steps = |harness| removal_steps(harness, "demo", &options).expect("steps");
+        assert_eq!(
+            steps(Harness::ClaudeCodeCli)[0].args,
+            ["mcp", "remove", "--scope", "project", "demo"]
+        );
+        assert_eq!(steps(Harness::Codex)[0].args, ["mcp", "remove", "demo"]);
+        assert_eq!(
+            steps(Harness::ArsyCode)[0].args,
+            ["mcp", "remove", "demo", "--scope", "workspace"]
+        );
+        for harness in [
+            Harness::GeminiCli,
+            Harness::Hermes,
+            Harness::Vscode,
+            Harness::Omp,
+        ] {
+            assert!(matches!(
+                unregister(harness, "demo", &options),
+                Err(Error::Unsupported { .. })
+            ));
+        }
+        assert!(unregister(Harness::Cursor, "bad name", &options).is_err());
+    }
+
+    #[test]
     fn opencode_uses_local_entry() {
         let spec = ServerSpec::stdio("demo", "demo", vec!["mcp".into()]);
         assert_eq!(
