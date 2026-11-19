@@ -2,6 +2,14 @@
 
 All notable changes to Kurir are documented here.
 
+## [0.8.0](https://github.com/suiflex/kurir/compare/v0.7.0...v0.8.0) (2026-11-19)
+
+
+### Features
+
+* register OMP MCP servers ([caf8a2e](https://github.com/suiflex/kurir/commit/caf8a2ebc3c0f28a6d001e61612dc59da7f760c1))
+* register OMP MCP servers ([fd26ae4](https://github.com/suiflex/kurir/commit/fd26ae4b408e0073fb51152a4fbcd2f693311239))
+
 ## [0.7.0](https://github.com/suiflex/kurir/compare/v0.6.1...v0.7.0) (2026-11-05)
 
 
