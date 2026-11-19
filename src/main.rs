@@ -4,7 +4,7 @@ use clap::{Args, Parser, Subcommand};
 use kurir::{
     Harness, HookSpec, RegistrationOptions, Scope, ServerSpec, Transport, install_skill,
     register_hook,
-    registration::{entry_for, register, snippet_for},
+    registration::{entry_for, register},
     unregister, update,
 };
 #[derive(Debug, Parser)]
@@ -323,17 +323,7 @@ fn register_command(args: RegisterArgs) -> Result<(), kurir::Error> {
         print: args.print,
     };
     let result = register(harness, &spec, &options)?;
-    if harness.is_snippet_only() {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&snippet_for(&spec)).map_err(|source| {
-                kurir::Error::InvalidJson {
-                    path: "stdout".to_owned(),
-                    source,
-                }
-            })?
-        );
-    } else if !args.print && !args.dry_run {
+    if !args.print && !args.dry_run {
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({

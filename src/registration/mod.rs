@@ -32,9 +32,6 @@ pub fn register(
     options: &RegistrationOptions,
 ) -> Result<RegistrationResult, Error> {
     spec.validate()?;
-    if harness.is_snippet_only() {
-        return Ok(result(harness, spec, None, false, "snippet-only"));
-    }
     if harness.is_delegated() {
         return delegated(harness, spec, options);
     }
@@ -67,6 +64,21 @@ pub fn entry_for(harness: Harness, spec: &ServerSpec) -> Result<Value, Error> {
         Harness::OpenClaw => open_claw_entry(spec),
         Harness::Zed => zed_entry(spec),
         Harness::CopilotCli => copilot_entry(spec),
+        Harness::Omp => {
+            if spec.name.len() > 100
+                || !spec
+                    .name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"_.-:".contains(&byte))
+            {
+                return Err(Error::InvalidArgument {
+                    field: "name",
+                    value: spec.name.clone(),
+                    expected: "an OMP server name of at most 100 ASCII letters, digits, _, ., -, or :",
+                });
+            }
+            typed_standard_entry(harness, spec)
+        }
         Harness::Jcode | Harness::Zcode => typed_standard_entry(harness, spec),
         _ => standard_entry(spec),
     }
@@ -141,10 +153,27 @@ fn result(
 }
 
 fn resolved_target_path(harness: Harness, options: &RegistrationOptions) -> Result<PathBuf, Error> {
+    if harness == Harness::Omp {
+        return omp_target_path(options);
+    }
     if matches!(harness, Harness::Jcode | Harness::Zcode) {
         return new_harness_target_path(harness, options);
     }
     target_path(harness, options)
+}
+
+fn omp_target_path(options: &RegistrationOptions) -> Result<PathBuf, Error> {
+    if let Some(path) = &options.config {
+        return Ok(path.clone());
+    }
+    match options.scope {
+        Scope::Project => Ok(options.cwd.join(".omp/mcp.json")),
+        // shortcut: default profile only; pass --config for named profiles or relocated directories.
+        Scope::User => Ok(env::home_dir()
+            .ok_or(Error::MissingArgument("home directory"))?
+            .join(".omp/agent/mcp.json")),
+        Scope::Local => unsupported(Harness::Omp, "local file scope"),
+    }
 }
 
 fn target_path(harness: Harness, options: &RegistrationOptions) -> Result<PathBuf, Error> {
@@ -624,9 +653,6 @@ pub fn unregister(
         name: name.to_owned(),
         ..ServerSpec::default()
     };
-    if harness.is_snippet_only() {
-        return unsupported(harness, "unregistration; remove the snippet manually");
-    }
     if harness.is_delegated() {
         if !run_steps(removal_steps(harness, name, options)?, options)? {
             return Ok(result(harness, &spec, None, false, "dry-run"));
@@ -772,15 +798,6 @@ fn doctor_one(harness: Harness, options: &RegistrationOptions) -> Result<DoctorR
             target: None,
             available: false,
             detail: "project or local MCP registration is unsupported".into(),
-        });
-    }
-    if harness.is_snippet_only() {
-        return Ok(DoctorReport {
-            harness: harness.id().into(),
-            kind: "snippet",
-            target: None,
-            available: true,
-            detail: "portable snippet available".into(),
         });
     }
     if let Some(program) = delegated_program(harness) {
@@ -969,12 +986,7 @@ mod tests {
             steps(Harness::ArsyCode)[0].args,
             ["mcp", "remove", "demo", "--scope", "workspace"]
         );
-        for harness in [
-            Harness::GeminiCli,
-            Harness::Hermes,
-            Harness::Vscode,
-            Harness::Omp,
-        ] {
+        for harness in [Harness::GeminiCli, Harness::Hermes, Harness::Vscode] {
             assert!(matches!(
                 unregister(harness, "demo", &options),
                 Err(Error::Unsupported { .. })
@@ -1163,6 +1175,99 @@ mod tests {
         options.scope = Scope::Project;
         assert!(matches!(
             register(Harness::Jcode, &spec, &options),
+            Err(Error::Unsupported { .. })
+        ));
+    }
+
+    #[test]
+    fn omp_registers_and_removes_native_project_server() {
+        let dir = tempdir().expect("temp");
+        let path = dir.path().join(".omp/mcp.json");
+        fs::create_dir_all(path.parent().expect("config parent")).expect("create .omp");
+        fs::write(
+            &path,
+            r#"{"$schema":"https://example.test/schema","mcpServers":{"other":{"command":"other"}}}"#,
+        )
+        .expect("seed OMP config");
+        let options = opts(dir.path());
+        let spec = ServerSpec::stdio("demo", "demo", vec!["mcp".into()]);
+
+        let result = register(Harness::Omp, &spec, &options).expect("register OMP");
+        assert_eq!(result.target.as_deref(), Some(path.as_path()));
+        assert!(result.changed);
+        let config: Value = serde_json::from_str(&fs::read_to_string(&path).expect("read config"))
+            .expect("parse config");
+        assert_eq!(config["$schema"], "https://example.test/schema");
+        assert_eq!(config["mcpServers"]["other"]["command"], "other");
+        assert_eq!(config["mcpServers"]["demo"]["type"], "stdio");
+        assert!(path.with_extension("json.bak").exists());
+        assert_eq!(
+            register(Harness::Omp, &spec, &options)
+                .expect("register again")
+                .action,
+            "already-configured"
+        );
+        assert_eq!(
+            doctor(Some(Harness::Omp), &options).expect("doctor")[0].kind,
+            "file"
+        );
+
+        assert!(
+            unregister(Harness::Omp, "demo", &options)
+                .expect("unregister")
+                .changed
+        );
+        let config: Value = serde_json::from_str(&fs::read_to_string(&path).expect("read config"))
+            .expect("parse config");
+        assert!(config["mcpServers"].get("demo").is_none());
+        assert_eq!(config["mcpServers"]["other"]["command"], "other");
+    }
+
+    #[test]
+    fn omp_user_target_and_validation() {
+        let dir = tempdir().expect("temp");
+        let mut options = opts(dir.path());
+        options.scope = Scope::User;
+        assert_eq!(
+            resolved_target_path(Harness::Omp, &options).expect("user target"),
+            env::home_dir().expect("home").join(".omp/agent/mcp.json")
+        );
+        options.config = Some(dir.path().join("custom/mcp.json"));
+        options.dry_run = true;
+        let spec = ServerSpec::stdio("demo", "demo", vec![]);
+        assert_eq!(
+            register(Harness::Omp, &spec, &options)
+                .expect("dry run")
+                .action,
+            "dry-run"
+        );
+        assert!(!options.config.as_ref().expect("config path").exists());
+        for bad_name in ["bad/name", "a\"b"] {
+            let mut bad = spec.clone();
+            bad.name = bad_name.into();
+            assert!(matches!(
+                entry_for(Harness::Omp, &bad),
+                Err(Error::InvalidArgument { .. })
+            ));
+        }
+        let http = ServerSpec {
+            name: "remote".into(),
+            transport: Transport::Http,
+            url: Some("https://example.test/mcp".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            entry_for(Harness::Omp, &http).expect("HTTP entry")["type"],
+            "http"
+        );
+        let ws = ServerSpec {
+            name: "remote".into(),
+            transport: Transport::Ws,
+            url: Some("wss://example.test/mcp".into()),
+            ..Default::default()
+        };
+        assert!(matches!(
+            entry_for(Harness::Omp, &ws),
             Err(Error::Unsupported { .. })
         ));
     }
