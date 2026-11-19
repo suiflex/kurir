@@ -490,6 +490,15 @@ mod tests {
     }
 
     #[test]
+    fn omp_hooks_are_not_registered() {
+        assert_eq!(hook_file(Harness::Omp), None);
+        assert!(matches!(
+            hook_path(Harness::Omp, &RegistrationOptions::default()),
+            Err(Error::Unsupported { .. })
+        ));
+    }
+
+    #[test]
     fn zcode_existing_hook_enables_without_duplication() {
         let temp = tempfile::tempdir().expect("tempdir");
         let path = temp.path().join("config.json");
