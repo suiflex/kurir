@@ -163,8 +163,7 @@ Delegated harnesses use the harness's own remove command:
 | `arsy-code` | `arsy mcp remove <name> --scope <user\|workspace>` |
 
 `gemini-cli`, `hermes`, and `vscode` report unsupported until their remove
-commands are verified. Snippet-only harnesses (`omp`) have nothing for Kurir
-to remove.
+commands are verified.
 
 ## Register lifecycle hooks
 
@@ -220,12 +219,17 @@ kurir skill \
 | OpenClaw | `mcp.servers` merge |
 | Hermes | `hermes mcp add` |
 | Antigravity CLI/Desktop | JSON merge |
-| OMP | Redacted portable snippet |
+| OMP | `.omp/mcp.json` (project) or `~/.omp/agent/mcp.json` (user) merge |
 | jcode | `~/.jcode/config.json` `mcp_servers` merge (user scope) |
 | ZCode | `.zcode/config.json` or `~/.zcode/cli/config.json` `mcp.servers` merge |
 
 jcode MCP registration uses the user scope. Kurir supports project and user
 skills in `.jcode/skills`; jcode lifecycle hooks are unsupported.
+
+OMP uses its native `mcpServers` map in `.omp/mcp.json` for project scope and
+`~/.omp/agent/mcp.json` for user scope. For named profiles or relocated OMP
+config directories, pass the intended `mcp.json` path with `--config`. OMP
+lifecycle hooks remain unsupported by Kurir.
 
 ZCode skills use `.zcode/skills` in each scope. ZCode hooks use the user-level
 `~/.zcode/cli/config.json`; project-level hooks are not executed by ZCode.

@@ -86,7 +86,7 @@ impl Harness {
         "merge Zed context_servers",
         "merge openclaw.json mcp.servers",
         "delegate to hermes mcp add",
-        "print a portable snippet",
+        "merge OMP mcp.json",
         "merge Antigravity CLI mcp_config.json",
         "merge Antigravity Desktop mcp_config.json",
         "merge ~/.jcode/config.json mcp_servers",
@@ -127,7 +127,8 @@ impl Harness {
 
     #[must_use]
     pub const fn is_snippet_only(self) -> bool {
-        matches!(self, Self::Omp)
+        // Keep the public method available for existing library callers.
+        false
     }
 }
 
